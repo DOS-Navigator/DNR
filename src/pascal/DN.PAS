@@ -46,6 +46,8 @@
 
 program DN;
 
+{$I doscompat.inc}
+
 {$M 20480,0,655350}
 {$I STDEFINE.INC}
 {$I DN.DEF}
@@ -54,8 +56,10 @@ program DN;
 uses
 {$IFDEF Debug} DEBUG, {$ENDIF}
 
+{$IFDEF USE_OVERLAY}
      Overlay,
      Overlays,
+{$ENDIF}
 
      Dos,
      Drivers,
