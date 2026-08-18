@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Histries;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Drivers, Objects, Views, MicroEd, ObjType;
@@ -145,7 +146,7 @@ const
 
 implementation
  uses Dos, Commands, DNApp, DNStdDlg, Dialogs, Advance,
-      Startup, RStrings, xTime, Messages, Idlers, DNUtil,
+      Startup, RStrings, xTime, DnMessages, Idlers, DNUtil,
       FViewer, CmdLine;
 
 procedure FreeLastUnmarked(C: PCollection);

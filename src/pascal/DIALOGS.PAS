@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Dialogs;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {-----------------------------------------------------}
 { This module is based on Turbo Vision Dialogs Unit   }
@@ -792,7 +793,7 @@ begin
   MoveChar(B, ' ', Color, Size.X);
   S := Copy(Data^, FirstPos + 1, Size.X - 2 * DrawShift);
   MoveStr(B[DrawShift], S, Color);
-  if Options and ofSecurity <> 0 then MoveChar(B[DrawShift], 'ï¿½', Color, Length(S));
+  if Options and ofSecurity <> 0 then MoveChar(B[DrawShift], 'þ', Color, Length(S));
   if DrawShift > 0 then
     begin
       if CanScroll(1) then MoveChar(B[Size.X - 1], #16, GetColor(4), 1)
@@ -1250,9 +1251,9 @@ begin
       if ShowMarkers then Ch := ' ' else
       begin
         if Y = 0 then
-          WordRec(B[S]).Lo := Byte('ï¿½') else
-          WordRec(B[S]).Lo := Byte('ï¿½');
-        Ch := 'ï¿½';
+          WordRec(B[S]).Lo := Byte('Ü') else
+          WordRec(B[S]).Lo := Byte('Û');
+        Ch := 'ß';
       end;
       I := 1;
     end;
@@ -1703,35 +1704,29 @@ begin
   end;
 end;
 
-procedure TCluster.SetButtonState(AMask: Longint; Enable: Boolean); assembler;
-asm
-        LES     DI,Self
-        MOV     AX,AMask.Word[0]
-        MOV     DX,AMask.Word[2]
-        TEST    Enable,0FFH
-        JNZ     @@1
-        NOT     AX
-        NOT     DX
-        AND     ES:[DI].TCluster.EnableMask.Word[0],AX
-        AND     ES:[DI].TCluster.EnableMask.Word[2],DX
-        JMP     @@2
-@@1:    OR      ES:[DI].TCluster.EnableMask.Word[0],AX
-        OR      ES:[DI].TCluster.EnableMask.Word[2],DX
-@@2:    MOV     CX,ES:[DI].Strings.TCollection.Count
-        CMP     CX,31
-        JA      @@6
-        MOV     BX,ES:[DI].TCluster.Options
-        AND     BX,not ofSelectable
-        MOV     AX,ES:[DI].TCluster.EnableMask.Word[0]
-        MOV     DX,ES:[DI].TCluster.EnableMask.Word[2]
-@@3:    SHR     DX,1
-        RCR     AX,1
-        JC      @@4
-        LOOP    @@3
-        JMP     @@5
-@@4:    OR      BX,ofSelectable
-@@5:    MOV     ES:[DI].TCluster.Options,BX
-@@6:
+procedure TCluster.SetButtonState(AMask: Longint; Enable: Boolean);
+{ Was 16-bit assembler; the SHR/RCR carry loop scanned the first
+  Strings.Count bits of EnableMask for any enabled button. }
+var
+  I: Integer;
+  M: Longint;
+begin
+  if Enable then EnableMask := EnableMask or AMask
+  else EnableMask := EnableMask and not AMask;
+  if Strings.Count <= 31 then
+  begin
+    Options := Options and not ofSelectable;
+    M := 1;
+    for I := 1 to Strings.Count do
+    begin
+      if (EnableMask and M) <> 0 then
+      begin
+        Options := Options or ofSelectable;
+        Break;
+      end;
+      M := M shl 1;
+    end;
+  end;
 end;
 
 procedure TCluster.SetData(var Rec);
@@ -2243,7 +2238,7 @@ begin
   FreeStr := HistoryStr(HistoryID, Item);
   FreeStr := CnvString(HistList.CurString);
   C := ' ';
-  if FreeStr[Length(FreeStr)] = '+' then C := 'ï¿½';
+  if FreeStr[Length(FreeStr)] = '+' then C := 'þ';
   Insert(C, FreeStr, 1);
   GetText := Copy(FreeStr, 1, Length(FreeStr)-1);
 end;

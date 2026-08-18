@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit FViewer;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -200,7 +201,7 @@ function SearchFileStr(F: PStream; What: String; Pos: LongInt;
 
 implementation
 
-uses Memory, Messages, DNApp, Advance, Startup, Dialogs, RStrings,
+uses Memory, DnMessages, DNApp, Advance, Startup, Dialogs, RStrings,
      Gauge, Microed, DNStdDlg, Histries, xTime, Drives;
 
 function MaxAvail: LongInt;

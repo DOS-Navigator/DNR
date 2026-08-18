@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 UNIT Commands;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 INTERFACE
 

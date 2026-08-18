@@ -77,12 +77,13 @@
 {=======================================================================}
 
 program TVHC;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {$S-}
 
 {$M 8192,8192,655360}
 
-uses Drivers, Objects, Dos, Strings, HelpKernel, Advance;
+uses Drivers, Objects, Dos, DnStrings, HelpKernel, Advance;
 
 {======================= File Management ===============================}
 

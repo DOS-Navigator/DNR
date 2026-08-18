@@ -45,10 +45,11 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Calc;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
-uses Objects, Views, CellsCol, Drivers, Dialogs, Par, Messages,
+uses Objects, Views, CellsCol, Drivers, Dialogs, Par, DnMessages,
      HistList, UniWin, Commands, DNHelp, RStrings, ObjType;
 
 const

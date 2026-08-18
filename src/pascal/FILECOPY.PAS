@@ -48,6 +48,7 @@
 {$I DN.DEF}
 
 unit FileCopy;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Advance, Objects, Views, Dialogs, Drivers, FilesCol, Dos;
@@ -82,7 +83,7 @@ function CopyDialog( var CopyDir: PathStr; var Mask: Str12;
                      FromTemp: Byte; Owner: PView; Link: Boolean): Boolean;
 
 implementation
-uses DNApp, Startup, ExtraMemory, Memory, Messages, HistList, Commands,
+uses DNApp, Startup, ExtraMemory, Memory, DnMessages, HistList, Commands,
      DiskTool, xTime, Validate, 
     {$IFDEF MODEM}
      NavyLink, 

@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 UNIT CDPlayer;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {.$DEFINE UPD}
 
@@ -243,7 +244,7 @@ CONST
 
 IMPLEMENTATION
 
-USES Advance, Messages, Commands, RStrings, DNHelp, DOS, DnApp, Startup,
+USES Advance, DnMessages, Commands, RStrings, DNHelp, DOS, DnApp, Startup,
      CDUtil ;
 
 CONST

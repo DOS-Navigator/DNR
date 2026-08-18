@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit ColorSel;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {-----------------------------------------------------}
 { This module is based on Turbo Vision ColorSel Unit  }
@@ -53,7 +54,7 @@ unit ColorSel;
 
 interface
 
-uses Objects, Drivers, Views, Dialogs, Scroller,  ColorVGA, Messages, Memory, ObjType, Advance;
+uses Objects, Drivers, Views, Dialogs, Scroller,  ColorVGA, DnMessages, Memory, ObjType, Advance;
 
 const
   cmColorForegroundChanged = 71;

@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Arvid;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Advance, Objects, DOS, Drives, FilesCol, Views, DiskInfo, ObjType;
@@ -153,7 +154,7 @@ const
 
 
 implementation
-uses FlPanel, Commands, Startup, DNApp, Drivers, Messages,
+uses FlPanel, Commands, Startup, DNApp, Drivers, DnMessages,
      Dialogs, Memory, FileFind, DnUtil;
 
 

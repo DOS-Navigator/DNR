@@ -45,11 +45,12 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit LinkUtil;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {$A+}
 
 {$I LINK.INC} interface uses
-         {$IFDEF DN}  Advance, Messages, Dos,{$ENDIF}
+         {$IFDEF DN}  Advance, DnMessages, Dos,{$ENDIF}
          {$IFDEF OS2} ObjOS2 {$ELSE} Objects {$ENDIF},
                      LinkTyp
           ;

@@ -64,9 +64,10 @@
 }
 
 unit MicroEd;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 interface
 uses
-  Dos, Objects, Drivers, Memory, Views, Messages, DNApp, Advance, Startup,
+  Dos, Objects, Drivers, Memory, Views, DnMessages, DNApp, Advance, Startup,
   Menus, DNStdDlg, Dialogs, Commands, UniWin, RStrings, DNHelp, SBlocks,
   ObjType;
 

@@ -45,10 +45,11 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit PrintManager;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
-uses Objects, Views, Drivers, DNApp, Advance, Dialogs, DOS, Messages,
+uses Objects, Views, Drivers, DNApp, Advance, Dialogs, DOS, DnMessages,
      Commands, ObjType;
 
  type

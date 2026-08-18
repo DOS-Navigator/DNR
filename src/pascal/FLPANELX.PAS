@@ -49,6 +49,7 @@
 
 UNIT
   FLPanelX;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 
 INTERFACE
@@ -123,7 +124,7 @@ IMPLEMENTATION
 
 uses
 {$IFDEF DEBUG} DEBUG, {$ENDIF}
-  Messages, DnApp, DnHelp, Startup, Commands, Histries, HistList, FlTools,
+  DnMessages, DnApp, DnHelp, Startup, Commands, Histries, HistList, FlTools,
   FileFind, 
 
   {$IFDEF MODEM}
@@ -132,7 +133,7 @@ uses
 
   CmdLine, ArcView, Archiver, UUcode, DiskImg, DiskInfo,
   FileCopy, DnUtil
-  {DNApp, Startup, Memory, FileCopy, Messages, Menus, DiskInfo, Validate,
+  {DNApp, Startup, Memory, FileCopy, DnMessages, Menus, DiskInfo, Validate,
   Dialogs, Commands, HistList, Tree, FBB, RStrings, UUCode, Swe,
   ArcView, CmdLine, Histries, Archiver, Gauges, Gauge, FileFind, FlPanel,
   NavyLink, DiskImg, FlTools};

@@ -1,23 +1,28 @@
-{ DN.DEF - reconstructed 2026-08-18.
+(* DN.DEF - reconstructed 2026-08-18.
 
-  Included immediately after STDEFINE.INC by the units that make up the DN
-  program proper (as opposed to the library units):
+   Included immediately after STDEFINE.INC by the units that make up the DN
+   program proper (as opposed to the library units):
 
-      DN.PAS  DNUTIL.PAS  FILECOPY.PAS  FILESCOL.PAS
-      FLPANELX.PAS  GAUGES.PAS  PHONES.PAS  TREE.PAS
+       DN.PAS  DNUTIL.PAS  FILECOPY.PAS  FILESCOL.PAS
+       FLPANELX.PAS  GAUGES.PAS  PHONES.PAS  TREE.PAS
 
-  Its job is to mark "this translation unit is part of the DN executable".
-  The symbol DN is tested 63 times across the tree - more than any other -
-  and STDEFINE.INC keys the CL_MASTER decision off it:
+   Its job is to mark "this translation unit is part of the DN executable".
+   The symbol DN is tested 63 times across the tree - more than any other -
+   and STDEFINE.INC keys the CL_MASTER decision off it (Modem + DN =>
+   CL_MASTER; see the derivation block there).
 
-      {$IFDEF Modem} {$IFDEF DN} {$DEFINE CL_MASTER} {$ENDIF} {$ENDIF}
+   DNPRG is the companion marker used by the same family of forks to mean
+   "building the program, not a plugin".
 
-  DNPRG is the companion marker used by the same family of forks to mean
-  "building the program, not a plugin".
+   NOTE: this is a RECONSTRUCTION. The original file was absent from the
+   repository. It is defines-only, so its effect is fully visible in the
+   conditional compilation below; nothing here is guesswork about code.
 
-  NOTE: this is a RECONSTRUCTION. The original file was absent from the
-  repository. It is defines-only, so its effect is fully visible in the
-  conditional compilation below; nothing here is guesswork about code. }
+   This comment deliberately uses paren-star delimiters: quoted brace
+   directives inside a brace comment would terminate it at their first
+   close-brace and leak the remainder into live code - which is exactly
+   the defect this file shipped with for a few hours. Do not write a
+   literal close delimiter inside either comment style; neither nests. *)
 
 {$DEFINE DN}
 {$DEFINE DNPRG}

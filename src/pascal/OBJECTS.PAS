@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Objects;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {-----------------------------------------------------}
 { This module is based on Turbo Vision Objects Unit   }
@@ -528,9 +529,9 @@ const
 implementation
 
 {$IFDEF Windows}
-uses WinProcs, Strings, OMemory;
+uses WinProcs, DnStrings, OMemory;
 {$ELSE}
-uses Memory, Strings;
+uses Memory, DnStrings;
 {$ENDIF}
 
 {$IFDEF FPC}
@@ -569,7 +570,28 @@ begin
   if P = nil then CnvString := '' else CnvString := P^;
 end;
 
+{$IFDEF FPC}
+{ FPC rejects both casting an object to a local record type and declaring
+  an object type inside a routine, so this lives at unit level. Follow
+  FPC's own Free Vision: derive an empty object whose Data field offset
+  IS the VMT-link size, so TObject.Init self-sizes instead of assuming
+  the link is a Word. }
+type
+  DummyObject = object(TObject)
+    Data: record end;
+  end;
+{$ENDIF}
+
 constructor TObject.Init;
+{$IFDEF FPC}
+var
+  LinkSize: LongInt;
+  Dummy: DummyObject;
+begin
+  LinkSize := PByte(@Dummy.Data) - PByte(@Dummy);
+  FillChar((PByte(@Self) + LinkSize)^, SizeOf(Self) - LinkSize, 0);
+end;
+{$ELSE}
 type
   Image = record
     Link: Word;
@@ -580,6 +602,7 @@ begin
   FillChar(Image(Self).Data, SizeOf(Self) - SizeOf(TObject), 0);
 {$ENDIF}
 end;
+{$ENDIF}
 
 { Shorthand procedure for a done/dispose }
 
@@ -3100,50 +3123,25 @@ asm
 @@4:    POP     DS
 end;
 
-function TRect.Contains(P: TPoint): Boolean; assembler;
-asm
-        LES     DI,Self
-        MOV     AL,0
-        MOV     DX,P.X
-        CMP     DX,ES:[DI].TRect.A.X
-        JL      @@1
-        CMP     DX,ES:[DI].TRect.B.X
-        JGE     @@1
-        MOV     DX,P.Y
-        CMP     DX,ES:[DI].TRect.A.Y
-        JL      @@1
-        CMP     DX,ES:[DI].TRect.B.Y
-        JGE     @@1
-        INC     AX
-@@1:
+function TRect.Contains(P: TPoint): Boolean;
+{ Was 16-bit assembler; semantics preserved exactly (half-open rectangle:
+  >= A, < B), matching FPC's Free Vision implementation. }
+begin
+  Contains := (P.X >= A.X) and (P.X < B.X) and
+              (P.Y >= A.Y) and (P.Y < B.Y);
 end;
 
-function TRect.Equals(R: TRect): Boolean; assembler;
-asm
-        PUSH    DS
-        LDS     SI,R
-        LES     DI,Self
-        MOV     CX,4
-        CLD
-        REP     CMPSW
-        MOV     AL,0
-        JNE     @@1
-        INC     AX
-@@1:    POP     DS
+function TRect.Equals(R: TRect): Boolean;
+{ Was 16-bit assembler (REP CMPSW over the four coordinate words). }
+begin
+  Equals := (A.X = R.A.X) and (A.Y = R.A.Y) and
+            (B.X = R.B.X) and (B.Y = R.B.Y);
 end;
 
-function TRect.Empty: Boolean; assembler;
-asm
-        LES     DI,Self
-        MOV     AL,1
-        MOV     DX,ES:[DI].TRect.A.X
-        CMP     DX,ES:[DI].TRect.B.X
-        JGE     @@1
-        MOV     DX,ES:[DI].TRect.A.Y
-        CMP     DX,ES:[DI].TRect.B.Y
-        JGE     @@1
-        DEC     AX
-@@1:
+function TRect.Empty: Boolean;
+{ Was 16-bit assembler; empty when either extent is degenerate. }
+begin
+  Empty := (A.X >= B.X) or (A.Y >= B.Y);
 end;
 
 {$ENDIF}

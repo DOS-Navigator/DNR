@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 Unit  ColorVGA;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -62,7 +63,7 @@ uses Objects, Drivers, Views, Dialogs, commands,
 implementation
 
 
- uses   {Colorsel,} Messages ;
+ uses   {Colorsel,} DnMessages ;
 {var Pal : vga_pal ;}
 
  Const  cmColorSet               = 73;

@@ -48,6 +48,7 @@
 {$I DN.DEF}
 
 unit Tree;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Drivers, Objects, DiskTool, Memory, Advance, Startup,
@@ -242,7 +243,7 @@ const NotRegister: Boolean = False;
 
 
 implementation
-uses  FlPanelX, DNApp, Messages, Commands, Drives, Eraser, Menus, RStrings,
+uses  FlPanelX, DNApp, DnMessages, Commands, Drives, Eraser, Menus, RStrings,
       xTime, FileCopy ;
 
 const

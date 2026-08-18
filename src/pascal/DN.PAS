@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 program DN;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {$I doscompat.inc}
 
@@ -79,7 +80,7 @@ uses
      Gauges,
      Memory,
      DblWnd,
-     Messages,
+     DnMessages,
      HistList,
      FileFind,
      Commands,

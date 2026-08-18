@@ -201,3 +201,69 @@ collide with the RTL proper - `STRINGS` and `MESSAGES` - and `STRINGS` is
 why `dos` reports "Can't find unit" (it shadows the RTL's `strings`, so
 `dos` is rebuilt against the wrong unit). Renaming those two is the next
 cheap win, worth ~16 units.
+
+---
+
+# Session 3: 8 -> 23 units (i8086-msdos), and an encoding incident
+
+## Measured state
+
+23 of 99 units compile for i8086-msdos with:
+
+    ppcross8086 -Mtp -Wmlarge -XX -uWINDOWS -dDN -Fi<src> -Fu<src> ...
+
+`-dDN` is new and required: LINKUTIL and friends hide their `uses ...
+Dos` behind `{$IFDEF DN}`, so the symbol must exist globally - the
+original build defined it in the lost TURBO.CFG, not only via DN.DEF.
+
+## Done this session
+
+* OBJECTS.PAS compiles: TObject.Init rebuilt on FPC's self-sizing
+  DummyObject pattern; TRect.Contains/Equals/Empty rewritten from asm.
+* ADVANCE.PAS compiles (gates 34 units): 15 pure string/arith assembler
+  helpers rewritten in portable Pascal; FileNameOf ported to FPC's
+  FileRec; hardware/DOS-interrupt asm left in place deliberately.
+* Units renamed to stop shadowing the FPC RTL: Strings -> DnStrings,
+  Messages -> DnMessages (uses-clause-scoped rewrite - DIALOGS has a
+  FIELD named Strings, so a global replace would corrupt it). STARSKY.PAS
+  renamed QSTARSKY.PAS to match its `unit qStarSky`.
+* {$V-} restored tree-wide (94 files): DN 1.51 was built with relaxed
+  var-string checks (ADVANCE passes string[30] to `var s: string`;
+  DRIVERS/GAUGE still carry explicit {$V-}); the setting lived in the
+  lost build config.
+* Reconstructed include files rewritten with paren-star comments: quoted
+  brace directives inside brace comments terminated them early and leaked
+  text into live code (three include files were broken this way; neither
+  Pascal comment style nests).
+* Original-source bugs fixed (both dead code under TP's first-match case
+  semantics, now errors under FPC): FIXER.PAS `S + +SStr` double plus,
+  FIXER.PAS case ranges 26..27/26..29 overlap (-> 28..29), XDBLWND.PAS
+  duplicate cmGetDirName arm.
+
+## Incident: harness Edit tool destroys CP866 sources
+
+The Claude Code Edit tool reads files as UTF-8 with errors=replace. On
+CP866 sources every high byte becomes U+FFFD (EF BF BD) - irreversibly,
+silently, across the whole file. ADVANCE's 128-byte UpperTable became 382
+bytes of replacement characters; DIALOGS and UUCODE lost comment bytes the
+same way (that damage was already in the previous two pushed commits).
+
+All corrupted lines were healed byte-exactly from main's blobs by regex
+fingerprint (ASCII kept, FFFD runs matched against original high-byte
+runs), verified by high-byte census against main. Standing rule for this
+repository: **.PAS files are edited only by byte-safe scripts** (python
+latin-1/binary), never by the interactive Edit tool, and Git-Bash sed
+strips CRLF so every sed pass needs an EOL restore after it.
+
+## The remaining wall
+
+Everything else funnels through **VIEWS.PAS(783): WriteView** - Turbo
+Vision's clipping/video blitter, ~200 lines of the most intricate 16-bit
+assembler in TV, walking the view tree computing visible spans. Free
+Vision's Pascal implementation is the reference to port from. Behind it
+sit DIALOGS/DNAPP/MENUS and the whole UI layer.
+
+Also open: RUNCMD.INC (missing code, DNUTIL blocked), COPY.PAS (orphan
+include-file, no unit header, nothing includes it), MODEMIO/COMLNKIO
+(need OOCOM/apFossil, Modem subsystem off), OVERLAYS (BP overlay manager,
+NO_OVERLAY set).

@@ -48,11 +48,12 @@
 {$I DN.DEF}
 
 unit Phones;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
 uses xTime, Objects, DNApp, Drivers, Dialogs, Menus, Views, DNStdDlg, RStrings
-     ,DNHelp, Advance, Messages, ObjType;
+     ,DNHelp, Advance, DnMessages, ObjType;
 
 type {TMyApp = object(TApplication)
        procedure Idle; virtual;

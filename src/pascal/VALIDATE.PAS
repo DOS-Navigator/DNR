@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Validate;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {-----------------------------------------------------}
 { This module is based on Turbo Vision Validate Unit  }
@@ -219,9 +220,9 @@ const
 implementation
 
 {$IFDEF Windows}
-uses WinTypes, WinProcs, Strings;
+uses WinTypes, WinProcs, DnStrings;
 {$ELSE}
-uses RStrings, Commands, DNApp, Messages;
+uses RStrings, Commands, DNApp, DnMessages;
 {$ENDIF}
 
 { TValidator }

@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit CmdLine;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 interface
  uses Objects, Views, Drivers;
 
@@ -93,7 +94,7 @@ const Separators = [':','.',',','/','\','[',']','+','>','<','|',';',' '];
 
 implementation
  uses Dos, Commands, DNApp, DNStdDlg, Dialogs, Advance,
-      Startup, RStrings, xTime, Messages, Idlers, MicroEd, Histries,
+      Startup, RStrings, xTime, DnMessages, Idlers, MicroEd, Histries,
       FViewer;
 
 

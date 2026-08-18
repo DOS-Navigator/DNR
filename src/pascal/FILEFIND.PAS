@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit FileFind;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Objects, Views, Dialogs, Drivers, Menus, FileCopy, FilesCol, Eraser,
@@ -180,7 +181,7 @@ const
 
 
 implementation
-uses DNApp, Advance, Startup, Memory, Messages, HistList, Commands,
+uses DNApp, Advance, Startup, Memory, DnMessages, HistList, Commands,
      RStrings, FlPanel, FViewer, MicroEd, Tree, xTime, DnUtil;
 
 const

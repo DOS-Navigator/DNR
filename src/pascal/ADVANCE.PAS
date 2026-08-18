@@ -48,6 +48,7 @@
 {$A-,B-}
 
 UNIT Advance;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 INTERFACE
 
@@ -444,21 +445,12 @@ uses xTime;
 
 procedure MakeDate;
 
- procedure GetDig(R: Byte; var S); assembler;
- asm
-   les bx, S
-{   mov byte ptr es:[bx], 2}
-   mov al, R
-   xor ah,ah
-   mov cx, 10
-   div cl
-   add al, 48
-   add ah, 48
-   cmp al, 48
-   jnz  @@1
-   mov al, '0'
-  @@1:
-   mov es:[bx], ax
+ procedure GetDig(R: Byte; var S);
+ { Was asm: writes the two ASCII digits of R (0..99) at S. }
+ type TB2 = array[0..1] of Char;
+ begin
+   TB2(S)[0] := Chr(48 + R div 10);
+   TB2(S)[1] := Chr(48 + R mod 10);
  end;
 
 begin
@@ -599,38 +591,17 @@ begin
     else GetExt:=Copy(s,i,length(s)-i)
 end;
 
-Function LowCase(c : Char) : Char;assembler;
-label LocEx;
-asm
-   mov al,c
-   cmp al,65
-   jc  LocEx
-   cmp al,91
-   jnc LocEx
-   xor al,$20
-LocEx:
+Function LowCase(c : Char) : Char;
+begin
+  if (c >= 'A') and (c <= 'Z') then LowCase := Chr(Ord(c) + 32)
+  else LowCase := c;
 end;
 
-Procedure LowStr(var s : string);assembler;
-label NextChar,NoLow,LocExit;
-asm
-   les  bx,s
-   mov  ch,0
-   mov  cl, [es:bx]
-   inc  bx
-   jcxz LocExit
-NextChar:
-   mov  al, [es:bx]
-   cmp  al,65
-   jc   NoLow
-   cmp  al,91
-   jnc  NoLow
-   xor  al,$20
-   mov  [es:bx], al
-NoLow:
-   inc  bx
-   loop NextChar
-LocExit:
+Procedure LowStr(var s : string);
+var I: Integer;
+begin
+  for I := 1 to Length(s) do
+    if (s[I] >= 'A') and (s[I] <= 'Z') then s[I] := Chr(Ord(s[I]) + 32);
 end;
 
 
@@ -640,77 +611,30 @@ begin
  LowStrg:=s;
 end;
 
-Procedure UpStr(var s : string);assembler;
-label NextChar,NoLow,LocExit;
-asm
-   les  bx,s
-   mov  ch,0
-   mov  cl, [es:bx]
-   inc  bx
-   jcxz LocExit
-NextChar:
-   mov  al, [es:bx]
-   cmp  al,'a'
-   jc   NoLow
-   cmp  al,'z'+1
-   jnc  NoLow
-   xor  al,$20
-   mov  [es:bx], al
-NoLow:
-   inc  bx
-   loop NextChar
-LocExit:
+Procedure UpStr(var s : string);
+var I: Integer;
+begin
+  for I := 1 to Length(s) do
+    if (s[I] >= 'a') and (s[I] <= 'z') then s[I] := Chr(Ord(s[I]) - 32);
 end;
 
-Function UpStrg(const s : string) : string; assembler;
-label NextChar,NoLow,LocExit;
-asm
-   cld
-   push ds
-   lds  si,s
-   les  di, @Result
-   lodsb
-   stosb
-   mov  cl,al
-   mov  ch,0
-   jcxz LocExit
-NextChar:
-   lodsb
-   cmp  al,'a'
-   jc   NoLow
-   cmp  al,'z'+1
-   jnc  NoLow
-   xor  al,$20
-NoLow:
-   stosb
-   loop NextChar
-LocExit:
-   pop  ds
+Function UpStrg(const s : string) : string;
+var R: string; I: Integer;
+begin
+  R := s;
+  for I := 1 to Length(R) do
+    if (R[I] >= 'a') and (R[I] <= 'z') then R[I] := Chr(Ord(R[I]) - 32);
+  UpStrg := R;
 end;
 
-procedure DelSpace; assembler;
-asm
-  les bx, S
-  xor ch, ch
-  mov cl, es:[bx]
-  jcxz @@1
-  mov  di, 1
-  mov  si, 1
-  xor  al, al
-  mov  es:[bx], al
-@@2:
-  mov  al, es:[bx][di]
-  cmp  al, ' '
-  jz   @@3
-  cmp  al, 9
-  jz   @@3
-  mov  es:[bx][si], al
-  inc  byte ptr es:[bx]
-  inc  si
-@@3:
-  inc  di
-  loop @@2
-@@1:
+procedure DelSpace;
+{ Removes every space and tab from S in place. }
+var I: Integer; R: string;
+begin
+  R := '';
+  for I := 1 to Length(S) do
+    if (S[I] <> ' ') and (S[I] <> #9) then R := R + S[I];
+  S := R;
 end;
 
 
@@ -732,15 +656,13 @@ begin
  MakeFileName := S;
 end;
 
-Function Strg; assembler;
-asm
-  les  di, @Result
-  mov  al, Num
-  stosb
-  mov  ch, 0
-  mov  cl, al
-  mov  al, c
-  rep  stosb
+Function Strg;
+{ Returns Num copies of c. }
+var R: string;
+begin
+  R[0] := Chr(Num);
+  if Num > 0 then FillChar(R[1], Num, c);
+  Strg := R;
 end;
 
 Procedure SetBlink(Mode : boolean); assembler;
@@ -849,16 +771,11 @@ begin
  s[0]:=#8; Hex8Lo(a,s[1]); Hex8 := s;
 end;
 
-Function HexChar(a : byte) : char; assembler;
-label Loc1;
-asm
-   mov al,a
-   and al,0Fh
-   add al,'0'
-   cmp al,58
-   jc  Loc1
-   add al,7
-Loc1:
+Function HexChar(a : byte) : char;
+begin
+  a := a and $0F;
+  if a < 10 then HexChar := Chr(Ord('0') + a)
+  else HexChar := Chr(Ord('A') + a - 10);
 end;
 
 Procedure DefineChar(n : Integer;var a);
@@ -968,22 +885,13 @@ asm
 @empty:
 end;
 
-FUNCTION  PosChar; assembler;
-asm
-  les di,S
-  xor ch,ch
-  mov cl,byte ptr es:[di]
-  mov bx,cx
-  inc di
-  cld
-  mov al,C
-  repne scasb
-  jnz @S
-  sub bx,cx
-  mov al,bl
-  jmp @Q
-@S:xor al,al
-@Q:
+FUNCTION  PosChar;
+{ Position of C in S, 0 when absent. }
+var I: Integer;
+begin
+  PosChar := 0;
+  for I := 1 to Length(S) do
+    if S[I] = C then begin PosChar := I; Exit; end;
 end;
 
 
@@ -1075,33 +983,13 @@ end;
 
 
 
-FUNCTION AddSpace(const s:string; N:byte):string; assembler;
-asm
-   cld
-   push  ds
-   lds   si, s
-   les   di, @Result
-   lodsb
-   mov   ah, N
-   mov   ch, 0
-   cmp   al, ah
-   jae   @JustCopy
-   mov   [es:di], ah
-   inc   di
-   mov   cl, al
-   rep   movsb
-   sub   ah, al
-   mov   al, ' '
-   mov   cl, ah
-   rep   stosb
-   jmp   @End
-
-@JustCopy:
-   stosb
-   mov  cl, al
-   rep movsb
-@End:
-   pop  ds
+FUNCTION AddSpace(const s:string; N:byte):string;
+{ Pads s with trailing spaces to length N; longer strings pass unchanged. }
+var R: string;
+begin
+  R := s;
+  while Length(R) < N do R := R + ' ';
+  AddSpace := R;
 end;
 
 FUNCTION PredSpace;
@@ -1594,18 +1482,10 @@ begin
   LongRatio := 100 * X div Y;
 end;
 
-Function XDiv1024; assembler;
-asm
-  mov ax,word ptr X
-  mov dx,word ptr X + 2
-  mov al,ah
-  mov ah,dl
-  mov dl,dh
-  xor dh,dh
-  shr dx,1
-  rcr ax,1
-  shr dx,1
-  rcr ax,1
+Function XDiv1024;
+{ Was a 32-bit logical right shift by 10 done in DX:AX. }
+begin
+  XDiv1024 := X shr 10;
 end;
 
 Function FileSizeStr;
@@ -1660,13 +1540,11 @@ asm
         INT     10H
 end;
 
- procedure FillWord(var B;Count, W: Word); assembler;
- asm
-    cld
-    mov  ax, W
-    les  di, B
-    mov  cx, Count
-    rep  stosw
+ procedure FillWord(var B;Count, W: Word);
+ type TWords = array[0..32766] of Word;
+ var I: Word;
+ begin
+   for I := 1 to Count do TWords(B)[I - 1] := W;
  end;
 
 function FindArg(const Command: string; var S: string): Boolean;
@@ -1807,37 +1685,21 @@ begin
    end;
 end;
 
-Procedure AddStr(var S ; C : char);assembler ;
-   asm
-        cld
-        les Di,S
-        inc ES:DI.byte
-        mov al,ES:DI.byte
-        sub ah,ah
-        add DI,AX
-        mov al,C
-        Stosb
-   end;
+Procedure AddStr(var S ; C : char);
+{ Appends C to the shortstring at S (untyped to match original). }
+var P: ^String;
+begin
+  P := @S;
+  P^[0] := Chr(Length(P^) + 1);
+  P^[Length(P^)] := C;
+end;
 
-Procedure DelRight;assembler ;
-   asm
-        les Di,S
-        mov bl,ES:DI.byte
-        sub bh,bh
-        or  BX,BX
-        jz  @@3
-    @@1:
-        mov al, ES:[DI+BX]
-        cmp al, ' '
-        je  @@D
-        cmp al, 9
-        jne @@2
-   @@D: dec BX
-        jnz @@1
-    @@2:
-        mov ES:DI.byte,bl
-    @@3:
-   end;
+Procedure DelRight;
+{ Strips trailing spaces and tabs from S in place. }
+begin
+  while (Length(S) > 0) and ((S[Length(S)] = ' ') or (S[Length(S)] = #9)) do
+    S[0] := Chr(Length(S) - 1);
+end;
 
 procedure DelLeft(var S: string);
 var
@@ -2000,9 +1862,20 @@ function  FileNameOf(var F: file): string;
 var
   S: string;
 begin
+{$IFDEF FPC}
+  { FPC's file record layout differs from TP7's, so the local TFileRec
+    mirror cannot be cast onto it. FPC's FileRec.Name is a 256-char
+    #0-terminated array, too large to assign to a ShortString, so
+    copy up to the terminator by hand. }
+  S := '';
+  while (Length(S) < 255) and (FileRec(F).Name[Length(S)] <> #0) do
+    S := S + FileRec(F).Name[Length(S)];
+  FileNameOf := S;
+{$ELSE}
   S := TFileRec(F).Name;
   S[0] := Char(Pos(#0, S)-1);
   FileNameOf := S;
+{$ENDIF}
 end;
 
 function MemAdjust(L: LongInt): LongInt;
@@ -2066,38 +1939,17 @@ begin
  CalcTmpId:=Id;
 end;
 
-procedure Hex8Lo(L:longInt;var HexLo);assembler;
-asm
-        cld
-        les     di,[HexLo]
-        lea     bx,[LoHexChar]
-        mov     dx,[word ptr L+2]
-        call    @@OutWord
-        mov     dx,[word ptr L+0]
-        call    @@OutWord
-        jmp     @@End
-
-@@OutWord:      {DX-word}
-        mov     ax,dx
-        mov     cl,12
-        shr     ax,cl
-        xlat
-        stosb
-        mov     al,dh
-        and     al,0Fh
-        xlat
-        stosb
-        mov     al,dl
-        mov     cl,4
-        shr     al,cl
-        xlat
-        stosb
-        mov     al,dl
-        and     al,0Fh
-        xlat
-        stosb
-        retn
-@@End:
+procedure Hex8Lo(L:longInt;var HexLo);
+{ Writes the 8 lowercase hex digits of L, most significant first. }
+type TB8 = array[0..7] of Char;
+var I, D: Integer;
+begin
+  for I := 0 to 7 do
+  begin
+    D := (L shr ((7 - I) * 4)) and $F;
+    if D < 10 then TB8(HexLo)[I] := Chr(Ord('0') + D)
+    else TB8(HexLo)[I] := Chr(Ord('a') + D - 10);
+  end;
 end;
 
 function CalcTmpFName; begin CalcTmpFName:=MakeNormName(SwpDir,Hex8(Id)+'.'+AExt) end;

@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit NavyLink;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {$I LINK.INC} interface uses
   Advance, Dos, Objects, Views, Drives, Drivers,
@@ -133,7 +134,7 @@ implementation
 uses  {$IFDEF CL_LOG} ComLnk, {$ENDIF}
   Dialogs,
   LinkTyp, FlPanel, Memory, ApPort,
-  OOCom, ModemIO, Commands, DNApp, Messages, DnHelp, FileCopy,
+  OOCom, ModemIO, Commands, DNApp, DnMessages, DnHelp, FileCopy,
   ApMisc, LinkUtil, Startup, Eraser;
 
 

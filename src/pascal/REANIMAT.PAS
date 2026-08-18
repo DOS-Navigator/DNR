@@ -45,11 +45,12 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Reanimator;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
 uses DNApp, Dialogs, Objects, Views, Drivers, DiskTool, Dos, Advance, Memory,
-     FViewer, Commands, FilesCol, Drives, RStrings, Messages, DNHelp, DNStdDlg,Tree;
+     FViewer, Commands, FilesCol, Drives, RStrings, DnMessages, DNHelp, DNStdDlg,Tree;
 
 type
      PReaData = ^TReaData;

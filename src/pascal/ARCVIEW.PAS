@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 Unit ArcView;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 Interface uses Dos,Objects,Views,Drivers,FViewer,FlPanel,FilesCol,DiskInfo,
                DblWnd,HistList,HideView,RStrings,Drives,Commands,Archiver,
@@ -138,7 +139,7 @@ const
        Load: @TUserSaver.Load;
        Store: @TUserSaver.Store);
 
-Implementation uses Menus,DnApp,Messages,Dialogs,Gauge,FileCopy,
+Implementation uses Menus,DnApp,DnMessages,Dialogs,Gauge,FileCopy,
                     Memory,Startup, Arvid, xTime;
 
 const

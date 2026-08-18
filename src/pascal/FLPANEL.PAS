@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit FlPanel;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Objects, Views, Drivers, Dos, Eraser, FilesCol, HideView,
@@ -162,7 +163,7 @@ VAR
 
 implementation
 
-uses DNApp, Advance, Startup, Memory, FileCopy, Messages, Menus, DiskInfo,
+uses DNApp, Advance, Startup, Memory, FileCopy, DnMessages, Menus, DiskInfo,
      Dialogs, Commands, HistList, Tree, FBB, RStrings, UUCode,
      ArcView, CmdLine, Histries, Archiver, Gauges, Gauge, FileFind, FlTools;
 

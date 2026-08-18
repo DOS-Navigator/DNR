@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit DiskImg;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface uses FilesCol;
 
@@ -52,7 +53,7 @@ procedure UnpackDiskImages(AOwner: Pointer; Files: PFilesCollection);
 
 implementation
 
-uses Dos, Messages, Views, Commands, Objects, DnApp, Drivers,
+uses Dos, DnMessages, Views, Commands, Objects, DnApp, Drivers,
      Advance, FileCopy, DiskTool, Gauge, xTime;
 
 

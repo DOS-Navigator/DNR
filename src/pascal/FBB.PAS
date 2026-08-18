@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 UNIT FBB;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Dos;
@@ -52,7 +53,7 @@ uses Dos;
  Function LongCopy(fn1: PathStr): Boolean;
 
 implementation
-uses Advance, FileCopy, DNApp, Messages, Views, Objects, Dialogs, Commands,
+uses Advance, FileCopy, DNApp, DnMessages, Views, Objects, Dialogs, Commands,
      Drivers, Memory, FilesCol, DiskTool, RStrings, HistList, Gauge,
      StartUp, DNutil, xTime, DiskInfo;
 

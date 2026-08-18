@@ -49,6 +49,7 @@
 {$ENDIF}
 
 unit UUCode;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -65,7 +66,7 @@ implementation
 uses Dos
 {$IFDEF DN}
      ,Objects, Advance, Views, StartUp, Dialogs, xTime,
-     DNApp, Drivers, Gauge, Messages, Commands, RStrings, FileCopy,
+     DNApp, Drivers, Gauge, DnMessages, Commands, RStrings, FileCopy,
      HistList, DNStdDlg, DNUtil
 {$ENDIF};
 
@@ -881,13 +882,13 @@ begin
   if not ValidWNumber(TmpCRC) then Exit;
   if TmpCRC<>WholeSectCRC then
   begin
-   LocalError(GetString(dlleCRC_Err)+' ï¿½ '+CurPFile^.FName+', '+GetString(dlleSection)+' '+ItoS(CurSectNo));
+   LocalError(GetString(dlleCRC_Err)+' Ä '+CurPFile^.FName+', '+GetString(dlleSection)+' '+ItoS(CurSectNo));
   end;
   AuxT:=Num;
   if not ValidLNumber(s) then Exit;
   if s<>SectSSz then
   begin
-   LocalError(GetString(dlleSizeMism)+' ï¿½ '+CurPFile^.FName+', '+GetString(dlleSection)+' '+ItoS(CurSectNo));
+   LocalError(GetString(dlleSizeMism)+' Ä '+CurPFile^.FName+', '+GetString(dlleSection)+' '+ItoS(CurSectNo));
   end;
   CheckS:=On;
  end else

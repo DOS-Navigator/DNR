@@ -222,7 +222,7 @@ FUNCTION MakeInterfaceDialog: PDialog;
 FUNCTION MakeMouseDialog: PDialog;
 }
 IMPLEMENTATION
-uses Tree, Drives, Advance, Messages, DNHelp;
+uses Tree, Drives, Advance, DnMessages, DNHelp;
 {$ENDIF}
 
 procedure ConfirmSetup;

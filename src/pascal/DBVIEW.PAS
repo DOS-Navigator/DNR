@@ -46,12 +46,13 @@
 
 {$ifndef db}
 unit DBView;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses DBWatch, Objects, Views, Drivers, Dos, Memory, Dialogs, RStrings, FViewer, Commands, ObjType;
 {$else}
 
-uses DBWatch, Objects, Views, Drivers, Dos, Memory, Menus, Messages,
+uses DBWatch, Objects, Views, Drivers, Dos, Memory, Menus, DnMessages,
      Advance, Startup, FViewer, Dialogs, Commands, DNApp, DNStdDlg;
 
 {$endif}
@@ -158,7 +159,7 @@ type
 
 {$ifndef db}
 implementation
-uses Advance, Startup, DNHelp, DNApp, Messages;
+uses Advance, Startup, DNHelp, DNApp, DnMessages;
 {$endif}
 
 function MaxAvail: LongInt;

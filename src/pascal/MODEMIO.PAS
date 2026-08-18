@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 Unit ModemIO;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 Interface uses OOCOM, apPort, DOS;
 
@@ -123,7 +124,7 @@ var   StartTime     : Word;
       procedure StoreModemSetup;
 
 Implementation
-uses xTime, Advance, Objects, DNApp, Views, Terminal, Messages, StartUp, Commands, RStrings,
+uses xTime, Advance, Objects, DNApp, Views, Terminal, DnMessages, StartUp, Commands, RStrings,
      apUART, apFossil, DnUtil, Drivers;
 
 var MaxTime : Word;

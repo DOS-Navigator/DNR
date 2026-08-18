@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Archiver;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface uses Views, Objects, DOS, ObjType;
 
@@ -428,7 +429,7 @@ procedure InsertUserSaver(ACheck: Boolean);
 implementation
 
  uses Advance, DNApp, Drivers, Commands, Dialogs, FilesCol, FViewer,
-      StartUp, RStrings, Memory, Messages, ArcView, FileCopy, HistList,
+      StartUp, RStrings, Memory, DnMessages, ArcView, FileCopy, HistList,
       FStorage, Menus;
 
  const CDir: String = '';

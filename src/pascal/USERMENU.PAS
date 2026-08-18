@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit UserMenu;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Objects, Views, Scroller, Drivers, ObjType;
@@ -88,7 +89,7 @@ const
        Store: @TUserView.Store);
 
 implementation
-uses DNApp, Advance, Startup, Messages, Menus, Commands, MicroEd, WinClp,
+uses DNApp, Advance, Startup, DnMessages, Menus, Commands, MicroEd, WinClp,
      DNHelp, FilesCol, DOS, Memory, Dialogs, Tree, RStrings;
 
 type

@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit XDblWnd;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses DblWnd, Drivers, Views, Objects, ObjType;
@@ -156,7 +157,7 @@ begin
                cmPostHideRight,
                cmPostHideLeft,
                cmChangeInactive,
-               cmGetDirName,
+               { cmGetDirName removed: already handled by the cmPushName arm above; TP matched first, so this occurrence was dead }
                cmPanelCompare,
                cmDiskInfo,
                cmChangeDirectory,

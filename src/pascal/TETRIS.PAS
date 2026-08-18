@@ -47,11 +47,12 @@
 {$define dn}
 {$ifdef dn}
 unit Tetris;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 {$endif}
 
-USES Objects, Drivers, Views, DNApp, Dialogs, Memory, Menus, Messages,
+USES Objects, Drivers, Views, DNApp, Dialogs, Memory, Menus, DnMessages,
      Commands, Advance, RStrings, ObjType;
 
 const

@@ -47,10 +47,11 @@
 {$F+}
 
 unit Terminal;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
-uses Objects, Views, Scroller, Drivers, Dos, Memory, Menus, Messages,
+uses Objects, Views, Scroller, Drivers, Dos, Memory, Menus, DnMessages,
      Advance, Commands, DNApp, OOCOM, DNStdDlg, apPort, DNHelp,
      OOZModem, OOXModem, OOYModem, OOKermit, OOAbsPcl, Dialogs, xTime,
      ObjType;
