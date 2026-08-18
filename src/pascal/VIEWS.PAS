@@ -614,56 +614,210 @@ const
 { In    AL = Color                                      }
 { Out   AL = Attribute                                  }
 
-procedure MapColor; near; assembler;
-const
-  Self = 6;
-  TView_GetPalette = vmtHeaderSize + $2C;
-asm
-        OR      AL,AL
-        JE      @@3
-        LES     DI,[BP].Self
-@@1:    PUSH    ES
-        PUSH    DI
-        PUSH    AX
-        PUSH    ES
-        PUSH    DI
-        MOV     DI,ES:[DI]
-        CALL    DWORD PTR [DI].TView_GetPalette
-        MOV     BX,AX
-        MOV     ES,DX
-        OR      AX,DX
-        POP     AX
-        POP     DI
-        POP     DX
-        JE      @@2
-        CMP     AL,ES:[BX]
-        JA      @@3
-        SEGES   XLAT
-        OR      AL,AL
-        JE      @@3
-@@2:    MOV     ES,DX
-        LES     DI,ES:[DI].TView.Owner
-        MOV     SI,ES
-        OR      SI,DI
-        JNE     @@1
-        JMP     @@4
-@@3:    MOV     AL,ErrorAttr
-@@4:
+{ ------------------------------------------------------------------
+  The write/exposed engine. Ported from 16-bit assembler following
+  FPC Free Vision (packages/fv/src/views.inc); the buffer stride is
+  G^.Size.X because DN/TV2 group buffers are exactly Size.X*Size.Y
+  cells (FV uses ScreenWidth, having only the one screen-wide buffer;
+  the models agree on the top group, which spans the screen).
+  ------------------------------------------------------------------ }
+
+type
+  TWordArray = array[0..16382] of Word;
+  PWordArray = ^TWordArray;
+  TStatVar2 = record
+    Target: PView;
+    Offset, Y: Integer;
+  end;
+
+var
+  StaticVar1: PWordArray;
+  StaticVar2: TStatVar2;
+
+{ Palette mapping, the Pascal form of the old MapColor/MapCPair. }
+function DoMapColor(V: PView; Color: Byte): Byte;
+var
+  P: PPalette;
+begin
+  if Color = 0 then
+  begin
+    DoMapColor := ErrorAttr;
+    Exit;
+  end;
+  while V <> nil do
+  begin
+    P := V^.GetPalette;
+    if P <> nil then
+    begin
+      if Color > Length(P^) then
+      begin
+        DoMapColor := ErrorAttr;
+        Exit;
+      end;
+      Color := Ord(P^[Color]);
+      if Color = 0 then
+      begin
+        DoMapColor := ErrorAttr;
+        Exit;
+      end;
+    end;
+    V := V^.Owner;
+  end;
+  DoMapColor := Color;
 end;
+
+procedure DoWriteViewRec2(x1, x2: Integer; p: PView; ShadowCounter: Integer); forward;
+
+procedure DoWriteViewRec1(x1, x2: Integer; p: PView; ShadowCounter: Integer);
+var
+  G: PGroup;
+  C: Word;
+  BufPos, SrcPos, Cnt, dx: Integer;
+begin
+  repeat
+    p := p^.Next;
+    if p = StaticVar2.Target then
+    begin
+      G := PGroup(p^.Owner);
+      if G^.Buffer <> nil then
+      begin
+        BufPos := G^.Size.X * StaticVar2.Y + x1;
+        SrcPos := x1 - StaticVar2.Offset;
+        Cnt := x2 - x1;
+        if ShadowCounter = 0 then
+          Move(StaticVar1^[SrcPos], PWordArray(G^.Buffer)^[BufPos], Cnt shl 1)
+        else
+          while Cnt > 0 do
+          begin
+            C := StaticVar1^[SrcPos];
+            WordRec(C).Hi := ShadowAttr;
+            PWordArray(G^.Buffer)^[BufPos] := C;
+            Inc(BufPos);
+            Inc(SrcPos);
+            Dec(Cnt);
+          end;
+      end;
+      if G^.LockFlag = 0 then
+        DoWriteViewRec2(x1, x2, PView(G), ShadowCounter);
+      Exit;
+    end;
+    if ((p^.State and sfVisible) <> 0) and (StaticVar2.Y >= p^.Origin.Y) then
+    begin
+      if StaticVar2.Y < p^.Origin.Y + p^.Size.Y then
+      begin
+        if x1 < p^.Origin.X then
+        begin
+          if x2 <= p^.Origin.X then Continue;
+          DoWriteViewRec1(x1, p^.Origin.X, p, ShadowCounter);
+          x1 := p^.Origin.X;
+        end;
+        dx := p^.Origin.X + p^.Size.X;
+        if x2 <= dx then Exit;
+        if x1 < dx then x1 := dx;
+        Inc(dx, ShadowSize.X);
+        if ((p^.State and sfShadow) <> 0) and
+           (StaticVar2.Y >= p^.Origin.Y + ShadowSize.Y) then
+        begin
+          if x1 > dx then Continue;
+          Inc(ShadowCounter);
+          if x2 <= dx then Continue;
+          DoWriteViewRec1(x1, dx, p, ShadowCounter);
+          x1 := dx;
+          Dec(ShadowCounter);
+          Continue;
+        end
+        else
+          Continue;
+      end;
+      if ((p^.State and sfShadow) <> 0) and
+         (StaticVar2.Y < p^.Origin.Y + p^.Size.Y + ShadowSize.Y) then
+      begin
+        dx := p^.Origin.X + ShadowSize.X;
+        if x1 < dx then
+        begin
+          if x2 <= dx then Continue;
+          DoWriteViewRec1(x1, dx, p, ShadowCounter);
+          x1 := dx;
+        end;
+        Inc(dx, p^.Size.X);
+        if x1 >= dx then Continue;
+        Inc(ShadowCounter);
+        if x2 <= dx then Continue;
+        DoWriteViewRec1(x1, dx, p, ShadowCounter);
+        x1 := dx;
+        Dec(ShadowCounter);
+      end;
+    end;
+  until False;
+end;
+
+procedure DoWriteViewRec2(x1, x2: Integer; p: PView; ShadowCounter: Integer);
+var
+  Saved: TStatVar2;
+  G: PGroup;
+begin
+  G := PGroup(p^.Owner);
+  if ((p^.State and sfVisible) <> 0) and (G <> nil) then
+  begin
+    Saved := StaticVar2;
+    Inc(StaticVar2.Y, p^.Origin.Y);
+    Inc(x1, p^.Origin.X);
+    Inc(x2, p^.Origin.X);
+    Inc(StaticVar2.Offset, p^.Origin.X);
+    StaticVar2.Target := p;
+    if (StaticVar2.Y >= G^.Clip.A.Y) and (StaticVar2.Y < G^.Clip.B.Y) then
+    begin
+      if x1 < G^.Clip.A.X then x1 := G^.Clip.A.X;
+      if x2 > G^.Clip.B.X then x2 := G^.Clip.B.X;
+      if x1 < x2 then
+        DoWriteViewRec1(x1, x2, G^.Last, ShadowCounter);
+    end;
+    StaticVar2 := Saved;
+  end;
+end;
+
+procedure DoWriteView(Self: PView; x1, x2, y: Integer; var Buf);
+begin
+  if (y >= 0) and (y < Self^.Size.Y) then
+  begin
+    if x1 < 0 then x1 := 0;
+    if x2 > Self^.Size.X then x2 := Self^.Size.X;
+    if x1 < x2 then
+    begin
+      StaticVar2.Offset := x1;
+      StaticVar2.Y := y;
+      StaticVar1 := @Buf;
+      DoWriteViewRec2(x1, x2, Self, 0);
+    end;
+  end;
+end;
+
+{ Local-function callback helpers, copied from FPC Free Vision
+  (rtl-extra objects.pp): the frame-passing convention is the one part
+  that must not be hand-derived. }
+type
+{$IFDEF cpui8086}
+  TPointerMethodLocal = function(_BP: Word; Param1: Pointer): Pointer;
+{$ELSE}
+  TPointerMethodLocal = function(_EBP: Pointer; Param1: Pointer): Pointer;
+{$ENDIF}
+
+function CallPointerMethodLocal(Func: Pointer; Frame: Pointer;
+                                Param1: Pointer): Pointer;
+begin
+{$IFDEF cpui8086}
+  CallPointerMethodLocal := TPointerMethodLocal(Func)(Ofs(Frame^), Param1);
+{$ELSE}
+  CallPointerMethodLocal := TPointerMethodLocal(Func)(Frame, Param1);
+{$ENDIF}
+end;
+
 
 { Convert color pair into attribute pair                }
 { In    AX = Color pair                                 }
 { Out   AX = Attribute pair                             }
 
-procedure MapCPair; near; assembler;
-asm
-        OR      AH,AH
-        JE      @@1
-        XCHG    AL,AH
-        CALL    MapColor
-        XCHG    AL,AH
-@@1:    CALL    MapColor
-end;
+{ MapCPair folded into TView.GetColor. }
 
 { Write to view                                         }
 { In    AX    = Y coordinate                            }
@@ -671,243 +825,7 @@ end;
 {       CX    = Count                                   }
 {       ES:DI = Buffer Pointer                          }
 
-procedure WriteView; near; assembler;
-const
-  Self   =   6;
-  Target =  -4;
-  Buffer =  -8;
-  BufOfs = -10;
-asm
-        MOV     [BP].BufOfs,BX
-        MOV     [BP].Buffer[0],DI
-        MOV     [BP].Buffer[2],ES
-        ADD     CX,BX
-        XOR     DX,DX
-        LES     DI,[BP].Self
-        OR      AX,AX
-        JL      @@3
-        CMP     AX,ES:[DI].TView.Size.Y
-        JGE     @@3
-        OR      BX,BX
-        JGE     @@1
-        XOR     BX,BX
-@@1:    CMP     CX,ES:[DI].TView.Size.X
-        JLE     @@2
-        MOV     CX,ES:[DI].TView.Size.X
-@@2:    CMP     BX,CX
-        JL      @@10
-@@3:    RET
-@@10:   TEST    ES:[DI].TView.State,sfVisible
-        JE      @@3
-        CMP     ES:[DI].TView.Owner.Word[2],0
-        JE      @@3
-        MOV     [BP].Target[0],DI
-        MOV     [BP].Target[2],ES
-        ADD     AX,ES:[DI].TView.Origin.Y
-        MOV     SI,ES:[DI].TView.Origin.X
-        ADD     BX,SI
-        ADD     CX,SI
-        ADD     [BP].BufOfs,SI
-        LES     DI,ES:[DI].TView.Owner
-        CMP     AX,ES:[DI].TGroup.Clip.A.Y
-        JL      @@3
-        CMP     AX,ES:[DI].TGroup.Clip.B.Y
-        JGE     @@3
-        CMP     BX,ES:[DI].TGroup.Clip.A.X
-        JGE     @@11
-        MOV     BX,ES:[DI].TGroup.Clip.A.X
-@@11:   CMP     CX,ES:[DI].TGroup.Clip.B.X
-        JLE     @@12
-        MOV     CX,ES:[DI].TGroup.Clip.B.X
-@@12:   CMP     BX,CX
-        JGE     @@3
-        LES     DI,ES:[DI].TGroup.Last
-@@20:   LES     DI,ES:[DI].TView.Next
-        CMP     DI,[BP].Target[0]
-        JNE     @@21
-        MOV     SI,ES
-        CMP     SI,[BP].Target[2]
-        JNE     @@21
-        JMP     @@40
-@@21:   TEST    ES:[DI].TView.State,sfVisible
-        JE      @@20
-        MOV     SI,ES:[DI].TView.Origin.Y
-        CMP     AX,SI
-        JL      @@20
-        ADD     SI,ES:[DI].TView.Size.Y
-        CMP     AX,SI
-        JL      @@23
-        TEST    ES:[DI].TView.State,sfShadow
-        JE      @@20
-        ADD     SI,ShadowSize.Y
-        CMP     AX,SI
-        JGE     @@20
-        MOV     SI,ES:[DI].TView.Origin.X
-        ADD     SI,ShadowSize.X
-        CMP     BX,SI
-        JGE     @@22
-        CMP     CX,SI
-        JLE     @@20
-        CALL    @@30
-@@22:   ADD     SI,ES:[DI].TView.Size.X
-        JMP     @@26
-@@23:   MOV     SI,ES:[DI].TView.Origin.X
-        CMP     BX,SI
-        JGE     @@24
-        CMP     CX,SI
-        JLE     @@20
-        CALL    @@30
-@@24:   ADD     SI,ES:[DI].TView.Size.X
-        CMP     BX,SI
-        JGE     @@25
-        CMP     CX,SI
-        JLE     @@31
-        MOV     BX,SI
-@@25:   TEST    ES:[DI].TView.State,sfShadow
-        JE      @@20
-        PUSH    SI
-        MOV     SI,ES:[DI].TView.Origin.Y
-        ADD     SI,ShadowSize.Y
-        CMP     AX,SI
-        POP     SI
-        JL      @@27
-        ADD     SI,ShadowSize.X
-@@26:   CMP     BX,SI
-        JGE     @@27
-        INC     DX
-        CMP     CX,SI
-        JLE     @@27
-        CALL    @@30
-        DEC     DX
-@@27:   JMP     @@20
-@@30:   PUSH    [BP].Target.Word[2]
-        PUSH    [BP].Target.Word[0]
-        PUSH    [BP].BufOfs.Word[0]
-        PUSH    ES
-        PUSH    DI
-        PUSH    SI
-        PUSH    DX
-        PUSH    CX
-        PUSH    AX
-        MOV     CX,SI
-        CALL    @@20
-        POP     AX
-        POP     CX
-        POP     DX
-        POP     SI
-        POP     DI
-        POP     ES
-        POP     [BP].BufOfs.Word[0]
-        POP     [BP].Target.Word[0]
-        POP     [BP].Target.Word[2]
-        MOV     BX,SI
-@@31:   RET
-@@40:   LES     DI,ES:[DI].TView.Owner
-        MOV     SI,ES:[DI].TGroup.Buffer.Word[2]
-        OR      SI,SI
-        JE      @@44
-        CMP     SI,ScreenBuffer.Word[2]
-        JE      @@41
-        CALL    @@50
-        JMP     @@44
-@@41:   CLI
-        CMP     GraphMouse, 0
-        JNE     @@43
-        CMP     AX,MouseWhere.Y
-        JNE     @@42
-        CMP     BX,MouseWhere.X
-        JA      @@42
-        CMP     CX,MouseWhere.X
-        JA      @@43
-@@42:   MOV     MouseIntFlag,0
-        STI
-        CALL    @@50
-        CMP     MouseIntFlag,0
-        JE      @@44
-@@43:   STI
-        CALL    HideMouse
-        CALL    @@50
-        CALL    ShowMouse
-@@44:   CMP     ES:[DI].TGroup.LockFlag,0
-        JNE     @@31
-        JMP     @@10
-@@50:   PUSH    ES
-        PUSH    DS
-        PUSH    DI
-        PUSH    CX
-        PUSH    AX
-        MUL     ES:[DI].TView.Size.X.Byte[0]
-        ADD     AX,BX
-        SHL     AX,1
-        ADD     AX,ES:[DI].TGroup.Buffer.Word[0]
-        MOV     DI,AX
-        MOV     ES,SI
-        XOR     AL,AL
-        CMP     SI,ScreenBuffer.Word[2]
-        JNE     @@51
-        MOV     AL,CheckSnow
-@@51:   MOV     AH,ShadowAttr
-        SUB     CX,BX
-        MOV     SI,BX
-        SUB     SI,[BP].BufOfs
-        SHL     SI,1
-        ADD     SI,[BP].Buffer.Word[0]
-        MOV     DS,[BP].Buffer.Word[2]
-        CLD
-        OR      AL,AL
-        JNE     @@60
-        OR      DX,DX
-        JNE     @@52
-        REP     MOVSW
-        JMP     @@70
-@@52:   LODSB
-        INC     SI
-        STOSW
-        LOOP    @@52
-        JMP     @@70
-@@60:   PUSH    DX
-        PUSH    BX
-        OR      DX,DX
-        MOV     DX,03DAH
-        JNE     @@65
-@@61:   LODSW
-        MOV     BX,AX
-@@62:   IN      AL,DX
-        TEST    AL,1
-        JNE     @@62
-        CLI
-@@63:   IN      AL,DX
-        TEST    AL,1
-        JE      @@63
-        MOV     AX,BX
-        STOSW
-        STI
-        LOOP    @@61
-        JMP     @@68
-@@65:   LODSB
-        MOV     BL,AL
-        INC     SI
-@@66:   IN      AL,DX
-        TEST    AL,1
-        JNE     @@66
-        CLI
-@@67:   IN      AL,DX
-        TEST    AL,1
-        JE      @@67
-        MOV     AL,BL
-        STOSW
-        STI
-        LOOP    @@65
-@@68:   POP     BX
-        POP     DX
-@@70:   MOV     SI,ES
-        POP     AX
-        POP     CX
-        POP     DI
-        POP     DS
-        POP     ES
-        RET
-end;
+{ WriteView replaced by DoWriteView/DoWriteViewRec1/2 above. }
 
 { TView }
 
@@ -1184,26 +1102,11 @@ begin
   EventAvail := Event.What <> evNothing;
 end;
 
-procedure TView.GetBounds(var Bounds: TRect); assembler;
-asm
-        PUSH    DS
-        LDS     SI,Self
-        ADD     SI,OFFSET TView.Origin
-        LES     DI,Bounds
-        CLD
-        LODSW                           {Origin.X}
-        MOV     CX,AX
-        STOSW
-        LODSW                           {Origin.Y}
-        MOV     DX,AX
-        STOSW
-        LODSW                           {Size.X}
-        ADD     AX,CX
-        STOSW
-        LODSW                           {Size.Y}
-        ADD     AX,DX
-        STOSW
-        POP     DS
+procedure TView.GetBounds(var Bounds: TRect);
+begin
+  Bounds.A := Origin;
+  Bounds.B.X := Origin.X + Size.X;
+  Bounds.B.Y := Origin.Y + Size.Y;
 end;
 
 function TView.Execute: Word;
@@ -1211,111 +1114,106 @@ begin
   Execute := cmCancel;
 end;
 
-function TView.Exposed: Boolean; assembler;
+function DoExposedRec2(x1, x2: Integer; p: PView): Boolean; forward;
+
+function DoExposedRec1(x1, x2: Integer; p: PView): Boolean;
 var
-  Target: Pointer;
-asm
-        LES     DI,Self
-        TEST    ES:[DI].TView.State,sfExposed
-        JE      @@2
-        XOR     AX,AX
-        CMP     AX,ES:[DI].TView.Size.X
-        JGE     @@2
-        CMP     AX,ES:[DI].TView.Size.Y
-        JGE     @@2
-@@1:    XOR     BX,BX
-        MOV     CX,ES:[DI].TView.Size.X
-        PUSH    AX
-        CALL    @@11
-        POP     AX
-        JNC     @@3
-        LES     DI,Self
-        INC     AX
-        CMP     AX,ES:[DI].TView.Size.Y
-        JL      @@1
-@@2:    MOV     AL,0
-        JMP     @@30
-@@3:    MOV     AL,1
-        JMP     @@30
-@@8:    STC
-@@9:    RETN
-@@10:   LES     DI,ES:[DI].TView.Owner
-        CMP     ES:[DI].TGroup.Buffer.Word[2],0
-        JNE     @@9
-@@11:   MOV     Target.Word[0],DI
-        MOV     Target.Word[2],ES
-        ADD     AX,ES:[DI].TView.Origin.Y
-        MOV     SI,ES:[DI].TView.Origin.X
-        ADD     BX,SI
-        ADD     CX,SI
-        LES     DI,ES:[DI].TView.Owner
-        MOV     SI,ES
-        OR      SI,DI
-        JE      @@9
-        CMP     AX,ES:[DI].TGroup.Clip.A.Y
-        JL      @@8
-        CMP     AX,ES:[DI].TGroup.Clip.B.Y
-        JGE     @@8
-        CMP     BX,ES:[DI].TGroup.Clip.A.X
-        JGE     @@12
-        MOV     BX,ES:[DI].TGroup.Clip.A.X
-@@12:   CMP     CX,ES:[DI].TGroup.Clip.B.X
-        JLE     @@13
-        MOV     CX,ES:[DI].TGroup.Clip.B.X
-@@13:   CMP     BX,CX
-        JGE     @@8
-        LES     DI,ES:[DI].TGroup.Last
-@@20:   LES     DI,ES:[DI].TView.Next
-        CMP     DI,Target.Word[0]
-        JNE     @@21
-        MOV     SI,ES
-        CMP     SI,Target.Word[2]
-        JE      @@10
-@@21:   TEST    ES:[DI].TView.State,sfVisible
-        JE      @@20
-        MOV     SI,ES:[DI].TView.Origin.Y
-        CMP     AX,SI
-        JL      @@20
-        ADD     SI,ES:[DI].TView.Size.Y
-        CMP     AX,SI
-        JGE     @@20
-        MOV     SI,ES:[DI].TView.Origin.X
-        CMP     BX,SI
-        JL      @@22
-        ADD     SI,ES:[DI].TView.Size.X
-        CMP     BX,SI
-        JGE     @@20
-        MOV     BX,SI
-        CMP     BX,CX
-        JL      @@20
-        STC
-        RETN
-@@22:   CMP     CX,SI
-        JLE     @@20
-        ADD     SI,ES:[DI].TView.Size.X
-        CMP     CX,SI
-        JG      @@23
-        MOV     CX,ES:[DI].TView.Origin.X
-        JMP     @@20
-@@23:   PUSH    Target.Word[2]
-        PUSH    Target.Word[0]
-        PUSH    ES
-        PUSH    DI
-        PUSH    SI
-        PUSH    CX
-        PUSH    AX
-        MOV     CX,ES:[DI].TView.Origin.X
-        CALL    @@20
-        POP     AX
-        POP     CX
-        POP     BX
-        POP     DI
-        POP     ES
-        POP     Target.Word[0]
-        POP     Target.Word[2]
-        JC      @@20
-        RETN
-@@30:
+  dx: Integer;
+begin
+  while True do
+  begin
+    p := p^.Next;
+    if p = StaticVar2.Target then
+    begin
+      DoExposedRec1 := DoExposedRec2(x1, x2, p^.Owner);
+      Exit;
+    end;
+    dx := p^.Origin.X;
+    if ((p^.State and sfVisible) <> 0) and (StaticVar2.Y >= p^.Origin.Y) then
+      if StaticVar2.Y < p^.Origin.Y + p^.Size.Y then
+      begin
+        if x1 < dx then
+        begin
+          if x2 <= dx then Continue;
+          if x2 > dx + p^.Size.X then
+          begin
+            if DoExposedRec1(x1, dx, p) then
+            begin
+              DoExposedRec1 := True;
+              Exit;
+            end;
+            x1 := dx + p^.Size.X;
+          end
+          else
+            x2 := dx;
+        end
+        else
+        begin
+          if x1 < dx + p^.Size.X then x1 := dx + p^.Size.X;
+          if x1 >= x2 then
+          begin
+            DoExposedRec1 := False;
+            Exit;
+          end;
+        end;
+      end;
+  end;
+end;
+
+function DoExposedRec2(x1, x2: Integer; p: PView): Boolean;
+var
+  G: PGroup;
+  Saved: TStatVar2;
+begin
+  if (p^.State and sfVisible) = 0 then
+  begin
+    DoExposedRec2 := False;
+    Exit;
+  end;
+  G := PGroup(p^.Owner);
+  if (G = nil) or (G^.Buffer <> nil) then
+  begin
+    DoExposedRec2 := True;
+    Exit;
+  end;
+  Saved := StaticVar2;
+  Inc(StaticVar2.Y, p^.Origin.Y);
+  Inc(x1, p^.Origin.X);
+  Inc(x2, p^.Origin.X);
+  StaticVar2.Target := p;
+  if (StaticVar2.Y < G^.Clip.A.Y) or (StaticVar2.Y >= G^.Clip.B.Y) then
+    DoExposedRec2 := False
+  else
+  begin
+    if x1 < G^.Clip.A.X then x1 := G^.Clip.A.X;
+    if x2 > G^.Clip.B.X then x2 := G^.Clip.B.X;
+    if x1 >= x2 then
+      DoExposedRec2 := False
+    else
+      DoExposedRec2 := DoExposedRec1(x1, x2, G^.Last);
+  end;
+  StaticVar2 := Saved;
+end;
+
+function TView.Exposed: Boolean;
+var
+  y: Integer;
+begin
+  Exposed := False;
+  if ((State and sfExposed) <> 0) and (Size.X > 0) and (Size.Y > 0) then
+  begin
+    y := 0;
+    while y < Size.Y do
+    begin
+      StaticVar2.Y := y;
+      if DoExposedRec2(0, Size.X, @Self) then
+      begin
+        Exposed := True;
+        Exit;
+      end;
+      Inc(y);
+    end;
+  end;
 end;
 
 function TView.Focus: Boolean;
@@ -1347,10 +1245,14 @@ begin
   Clip.Move(-Origin.X, -Origin.Y);
 end;
 
-function TView.GetColor(Color: Word): Word; assembler;
-asm
-        MOV     AX,Color
-        CALL    MapCPair
+function TView.GetColor(Color: Word): Word;
+var
+  W: Word;
+begin
+  W := 0;
+  if Hi(Color) <> 0 then
+    W := Word(DoMapColor(@Self, Hi(Color))) shl 8;
+  GetColor := W or DoMapColor(@Self, Lo(Color));
 end;
 
 procedure TView.GetCommands(var Commands: TCommandSet);
@@ -1367,19 +1269,11 @@ begin
   if Owner <> nil then Owner^.GetEvent(Event);
 end;
 
-procedure TView.GetExtent(var Extent: TRect); assembler;
-asm
-        PUSH    DS
-        LDS     SI,Self
-        ADD     SI,OFFSET TView.Size
-        LES     DI,Extent
-        CLD
-        XOR     AX,AX
-        STOSW
-        STOSW
-        MOVSW
-        MOVSW
-        POP     DS
+procedure TView.GetExtent(var Extent: TRect);
+begin
+  Extent.A.X := 0;
+  Extent.A.Y := 0;
+  Extent.B := Size;
 end;
 
 function TView.GetHelpCtx: Word;
@@ -1482,46 +1376,30 @@ begin
   PutInFrontOf(Owner^.First);
 end;
 
-procedure TView.MakeGlobal(Source: TPoint; var Dest: TPoint); assembler;
-asm
-        LES     DI,Self
-        XOR     AX,AX
-        MOV     DX,AX
-@@1:    ADD     AX,ES:[DI].TView.Origin.X
-        ADD     DX,ES:[DI].TView.Origin.Y
-        LES     DI,ES:[DI].TView.Owner
-        MOV     SI,ES
-        OR      SI,DI
-        JNE     @@1
-        ADD     AX,Source.X
-        ADD     DX,Source.Y
-        LES     DI,Dest
-        CLD
-        STOSW
-        XCHG    AX,DX
-        STOSW
+procedure TView.MakeGlobal(Source: TPoint; var Dest: TPoint);
+var
+  Cur: PView;
+begin
+  Dest := Source;
+  Cur := @Self;
+  repeat
+    Inc(Dest.X, Cur^.Origin.X);
+    Inc(Dest.Y, Cur^.Origin.Y);
+    Cur := Cur^.Owner;
+  until Cur = nil;
 end;
 
-procedure TView.MakeLocal(Source: TPoint; var Dest: TPoint); assembler;
-asm
-        LES     DI,Self
-        XOR     AX,AX
-        MOV     DX,AX
-@@1:    ADD     AX,ES:[DI].TView.Origin.X
-        ADD     DX,ES:[DI].TView.Origin.Y
-        LES     DI,ES:[DI].TView.Owner
-        MOV     SI,ES
-        OR      SI,DI
-        JNE     @@1
-        NEG     AX
-        NEG     DX
-        ADD     AX,Source.X
-        ADD     DX,Source.Y
-        LES     DI,Dest
-        CLD
-        STOSW
-        XCHG    AX,DX
-        STOSW
+procedure TView.MakeLocal(Source: TPoint; var Dest: TPoint);
+var
+  Cur: PView;
+begin
+  Dest := Source;
+  Cur := @Self;
+  repeat
+    Dec(Dest.X, Cur^.Origin.X);
+    Dec(Dest.Y, Cur^.Origin.Y);
+    Cur := Cur^.Owner;
+  until Cur = nil;
 end;
 
 function TView.MouseEvent(var Event: TEvent; Mask: Word): Boolean;
@@ -1568,19 +1446,13 @@ begin
   SetState(sfCursorIns, False);
 end;
 
-function TView.Prev: PView; assembler;
-asm
-        LES     DI,Self
-        MOV     CX,DI
-        MOV     BX,ES
-@@1:    MOV     AX,DI
-        MOV     DX,ES
-        LES     DI,ES:[DI].TView.Next
-        CMP     DI,CX
-        JNE     @@1
-        MOV     SI,ES
-        CMP     SI,BX
-        JNE     @@1
+function TView.Prev: PView;
+var
+  P: PView;
+begin
+  P := @Self;
+  while P^.Next <> @Self do P := P^.Next;
+  Prev := P;
 end;
 
 function TView.PrevView: PView;
@@ -1631,72 +1503,86 @@ begin
   S.Write(Index, SizeOf(Word));
 end;
 
-procedure TView.ResetCursor; assembler;
-asm
-        LES     DI,Self
-        MOV     AX,ES:[DI].TView.State
-        NOT     AX
-        TEST    AX,sfVisible+sfCursorVis+sfFocused
-        JNE     @@4
-        MOV     AX,ES:[DI].TView.Cursor.Y
-        MOV     DX,ES:[DI].TView.Cursor.X
-@@1:    OR      AX,AX
-        JL      @@4
-        CMP     AX,ES:[DI].TView.Size.Y
-        JGE     @@4
-        OR      DX,DX
-        JL      @@4
-        CMP     DX,ES:[DI].TView.Size.X
-        JGE     @@4
-        ADD     AX,ES:[DI].TView.Origin.Y
-        ADD     DX,ES:[DI].TView.Origin.X
-        MOV     CX,DI
-        MOV     BX,ES
-        LES     DI,ES:[DI].TView.Owner
-        MOV     SI,ES
-        OR      SI,DI
-        JE      @@5
-        TEST    ES:[DI].TView.State,sfVisible
-        JE      @@4
-        LES     DI,ES:[DI].TGroup.Last
-@@2:    LES     DI,ES:[DI].TView.Next
-        CMP     CX,DI
-        JNE     @@3
-        MOV     SI,ES
-        CMP     BX,SI
-        JNE     @@3
-        LES     DI,ES:[DI].TView.Owner
-        JMP     @@1
-@@3:    TEST    ES:[DI].TView.State,sfVisible
-        JE      @@2
-        MOV     SI,ES:[DI].TView.Origin.Y
-        CMP     AX,SI
-        JL      @@2
-        ADD     SI,ES:[DI].TView.Size.Y
-        CMP     AX,SI
-        JGE     @@2
-        MOV     SI,ES:[DI].TView.Origin.X
-        CMP     DX,SI
-        JL      @@2
-        ADD     SI,ES:[DI].TView.Size.X
-        CMP     DX,SI
-        JGE     @@2
-@@4:    MOV     CX,2000H
-        JMP     @@6
-@@5:    MOV     DH,AL
-        XOR     BH,BH
-        MOV     AH,2
-        INT     10H
-        MOV     CX,CursorLines
-        LES     DI,Self
-        TEST    ES:[DI].TView.State,sfCursorIns
-        JE      @@6
-        MOV     CH,0
-        OR      CL,CL
-        JNE     @@6
-        MOV     CL,7
-@@6:    MOV     AH,1
-        INT     10H
+procedure TView.ResetCursor;
+{ Walks the owner chain: the cursor is shown only when this view is
+  visible+focused with a visible cursor, the cursor cell lies inside
+  every ancestor, and no later sibling covers it. Hardware access is
+  i8086-only; other targets get it from the platform layer later. }
+var
+  P, Q: PView;
+  X, Y: Integer;
+  Vis: Boolean;
+  Shape: Word;
+begin
+  Vis := False;
+  if (State and (sfVisible + sfCursorVis + sfFocused)) =
+     (sfVisible + sfCursorVis + sfFocused) then
+  begin
+    X := Cursor.X;
+    Y := Cursor.Y;
+    P := @Self;
+    Vis := True;
+    while Vis do
+    begin
+      if (Y < 0) or (Y >= P^.Size.Y) or (X < 0) or (X >= P^.Size.X) then
+      begin
+        Vis := False;
+        Break;
+      end;
+      Inc(X, P^.Origin.X);
+      Inc(Y, P^.Origin.Y);
+      if P^.Owner = nil then Break;   { reached the top: X,Y are screen coords }
+      if (P^.Owner^.State and sfVisible) = 0 then
+      begin
+        Vis := False;
+        Break;
+      end;
+      { any later sibling covering the point hides the cursor }
+      Q := P^.Owner^.Last^.Next;      { first in Z order }
+      while Q <> P do
+      begin
+        if ((Q^.State and sfVisible) <> 0) and
+           (Y >= Q^.Origin.Y) and (Y < Q^.Origin.Y + Q^.Size.Y) and
+           (X >= Q^.Origin.X) and (X < Q^.Origin.X + Q^.Size.X) then
+        begin
+          Vis := False;
+          Break;
+        end;
+        Q := Q^.Next;
+      end;
+      P := P^.Owner;
+    end;
+  end;
+{$IFDEF cpui8086}
+  if Vis then
+  begin
+    asm
+      mov ax, Y
+      mov dh, al
+      mov ax, X
+      mov dl, al
+      xor bh, bh
+      mov ah, 2
+      int 10h
+    end;
+    Shape := CursorLines;
+    if (State and sfCursorIns) <> 0 then
+    begin
+      Shape := Shape and $00FF;
+      if Lo(Shape) = 0 then Shape := 7;
+    end;
+  end
+  else
+    Shape := $2000;
+  asm
+    mov cx, Shape
+    mov ah, 1
+    int 10h
+  end;
+{$ELSE}
+  { Cursor hardware handled by the platform layer on non-DOS targets. }
+  if Vis then;
+{$ENDIF}
 end;
 
 procedure TView.Select;
@@ -1706,22 +1592,11 @@ begin
       if Owner <> nil then Owner^.SetCurrent(@Self, NormalSelect);
 end;
 
-procedure TView.SetBounds(var Bounds: TRect); assembler;
-asm
-        PUSH    DS
-        LES     DI,Self
-        LDS     SI,Bounds
-        MOV     AX,[SI].TRect.A.X
-        MOV     ES:[DI].Origin.X,AX
-        MOV     AX,[SI].TRect.A.Y
-        MOV     ES:[DI].Origin.Y,AX
-        MOV     AX,[SI].TRect.B.X
-        SUB     AX,[SI].TRect.A.X
-        MOV     ES:[DI].Size.X,AX
-        MOV     AX,[SI].TRect.B.Y
-        SUB     AX,[SI].TRect.A.Y
-        MOV     ES:[DI].Size.Y,AX
-        POP     DS
+procedure TView.SetBounds(var Bounds: TRect);
+begin
+  Origin := Bounds.A;
+  Size.X := Bounds.B.X - Bounds.A.X;
+  Size.Y := Bounds.B.Y - Bounds.A.Y;
 end;
 
 procedure TView.SetCmdState(Commands: TCommandSet; Enable: Boolean);
@@ -1827,116 +1702,46 @@ begin
   Valid := True;
 end;
 
-procedure TView.WriteBuf(X, Y, W, H: Integer; var Buf); assembler;
+procedure TView.WriteBuf(X, Y, W, H: Integer; var Buf);
 var
-  Target: Pointer; {Variables used by WriteView}
-  Buffer: Pointer;
-  Offset: Word;
-asm
-        CMP     H,0
-        JLE     @@2
-@@1:    MOV     AX,Y
-        MOV     BX,X
-        MOV     CX,W
-        LES     DI,Buf
-        CALL    WriteView
-        MOV     AX,W
-        SHL     AX,1
-        ADD     WORD PTR Buf[0],AX
-        INC     Y
-        DEC     H
-        JNE     @@1
-@@2:
+  I: Integer;
+begin
+  for I := 0 to H - 1 do
+    DoWriteView(@Self, X, X + W, Y + I, TWordArray(Buf)[W * I]);
 end;
 
 procedure TView.WriteChar(X, Y: Integer; C: Char; Color: Byte;
-  Count: Integer); assembler;
+  Count: Integer);
 var
-  Target: Pointer; {Variables used by WriteView}
-  Buffer: Pointer;
-  Offset: Word;
-asm
-        MOV     AL,Color
-        CALL    MapColor
-        MOV     AH,AL
-        MOV     AL,C
-        MOV     CX,Count
-        OR      CX,CX
-        JLE     @@2
-        CMP     CX,256
-        JLE     @@1
-        MOV     CX,256
-@@1:    MOV     DI,CX
-        SHL     DI,1
-        SUB     SP,DI
-        MOV     DI,SP
-        PUSH    SS
-        POP     ES
-        MOV     DX,CX
-        CLD
-        REP     STOSW
-        MOV     CX,DX
-        MOV     DI,SP
-        MOV     AX,Y
-        MOV     BX,X
-        CALL    WriteView
-@@2:
+  B: TDrawBuffer;
+  W: Word;
+  I: Integer;
+begin
+  if Count <= 0 then Exit;
+  if Count > MaxViewWidth then Count := MaxViewWidth;
+  W := Word(DoMapColor(@Self, Color)) shl 8 + Ord(C);
+  for I := 0 to Count - 1 do B[I] := W;
+  DoWriteView(@Self, X, X + Count, Y, B);
 end;
 
-procedure TView.WriteLine(X, Y, W, H: Integer; var Buf); assembler;
+procedure TView.WriteLine(X, Y, W, H: Integer; var Buf);
 var
-  Target: Pointer; {Variables used by WriteView}
-  Buffer: Pointer;
-  Offset: Word;
-asm
-        CMP     H,0
-        JLE     @@2
-@@1:    MOV     AX,Y
-        MOV     BX,X
-        MOV     CX,W
-        LES     DI,Buf
-        CALL    WriteView
-        INC     Y
-        DEC     H
-        JNE     @@1
-@@2:
+  I: Integer;
+begin
+  for I := 0 to H - 1 do
+    DoWriteView(@Self, X, X + W, Y + I, Buf);
 end;
 
-procedure TView.WriteStr(X, Y: Integer; Str: String; Color: Byte); assembler;
+procedure TView.WriteStr(X, Y: Integer; Str: String; Color: Byte);
 var
-  Target: Pointer; {Variables used by WriteView}
-  Buffer: Pointer;
-  Offset: Word;
-asm
-        MOV     AL,Color
-        CALL    MapColor
-        MOV     AH,AL
-        MOV     BX,DS
-        LDS     SI,Str
-        CLD
-        LODSB
-        MOV     CL,AL
-        XOR     CH,CH
-        JCXZ    @@3
-        MOV     DI,CX
-        SHL     DI,1
-        SUB     SP,DI
-        MOV     DI,SP
-        PUSH    SS
-        POP     ES
-        MOV     DX,CX
-@@1:    LODSB
-        STOSW
-        LOOP    @@1
-        MOV     DS,BX
-        MOV     CX,DX
-        MOV     DI,SP
-        MOV     AX,Y
-        MOV     BX,X
-        CALL    WriteView
-        JMP     @@2
-@@3:    MOV     DS,BX
-@@2:
+  B: TDrawBuffer;
+  Attr: Word;
+  I: Integer;
+begin
+  if Length(Str) = 0 then Exit;
+  Attr := Word(DoMapColor(@Self, Color)) shl 8;
+  for I := 1 to Length(Str) do B[I - 1] := Attr or Ord(Str[I]);
+  DoWriteView(@Self, X, X + Length(Str), Y, B);
 end;
 
 { TFrame }
@@ -1949,7 +1754,7 @@ begin
 end;
 
 procedure TFrame.FrameLine(var FrameBuf; Y, N: Integer;
-  Color: Byte); assembler;
+  Color: Byte);
 const
   InitFrame: array[0..17] of Byte =
     ($06, $0A, $0C, $05, $00, $05, $03, $0A, $09,
@@ -1958,80 +1763,58 @@ const
     '   À ³ÚÃ ÙÄÁ¿´ÂÅ   È ºÉÇ ¼ÍÏ»¶Ñ ';
 var
   FrameMask: array[0..MaxViewWidth-1] of Byte;
-asm
-        LES     BX,Self
-        MOV     DX,ES:[BX].TFrame.Size.X
-        MOV     CX,DX
-        DEC     CX
-        DEC     CX
-        MOV     SI,OFFSET InitFrame
-        ADD     SI,N
-        LEA     DI,FrameMask
-        PUSH    SS
-        POP     ES
-        CLD
-        MOVSB
-        LODSB
-        REP     STOSB
-        MOVSB
-        LES     BX,Self
-        LES     BX,ES:[BX].TFrame.Owner
-        LES     BX,ES:[BX].TGroup.Last
-        DEC     DX
-@1:     LES     BX,ES:[BX].TView.Next
-        CMP     BX,WORD PTR Self[0]
-        JNE     @2
-        MOV     AX,ES
-        CMP     AX,WORD PTR Self[2]
-        JE      @10
-@2:     TEST    ES:[BX].TView.Options,ofFramed
-        JE      @1
-        TEST    ES:[BX].TView.State,sfVisible
-        JE      @1
-        MOV     AX,Y
-        SUB     AX,ES:[BX].TView.Origin.Y
-        JL      @3
-        CMP     AX,ES:[BX].TView.Size.Y
-        JG      @1
-        MOV     AX,0005H
-        JL      @4
-        MOV     AX,0A03H
-        JMP     @4
-@3:     INC     AX
-        JNE     @1
-        MOV     AX,0A06H
-@4:     MOV     SI,ES:[BX].TView.Origin.X
-        MOV     DI,ES:[BX].TView.Size.X
-        ADD     DI,SI
-        CMP     SI,1
-        JG      @5
-        MOV     SI,1
-@5:     CMP     DI,DX
-        JL      @6
-        MOV     DI,DX
-@6:     CMP     SI,DI
-        JGE     @1
-        OR      BYTE PTR FrameMask[SI-1],AL
-        XOR     AL,AH
-        OR      BYTE PTR FrameMask[DI],AL
-        OR      AH,AH
-        JE      @1
-        MOV     CX,DI
-        SUB     CX,SI
-@8:     OR      BYTE PTR FrameMask[SI],AH
-        INC     SI
-        LOOP    @8
-        JMP     @1
-@10:    INC     DX
-        MOV     AH,Color
-        MOV     BX,OFFSET FrameChars
-        MOV     CX,DX
-        LEA     SI,FrameMask
-        LES     DI,FrameBuf
-@11:    SEGSS   LODSB
-        XLAT
-        STOSW
-        LOOP    @11
+{ Was 16-bit assembler. Builds a connection-bit mask for the frame row,
+  ORing in the edges of every framed visible subview that touches it,
+  then maps the masks through FrameChars. N indexes InitFrame: a
+  [first, fill, last] triplet per row kind. }
+var
+  { FrameMask comes from the original declaration block above }
+  I, W, MinX, MaxX: Integer;
+  P: PView;
+  EdgeBits, FillBits: Byte;
+begin
+  W := Size.X;
+  FrameMask[0] := InitFrame[N];
+  for I := 1 to W - 2 do FrameMask[I] := InitFrame[N + 1];
+  FrameMask[W - 1] := InitFrame[N + 2];
+  P := PGroup(Owner)^.Last;
+  repeat
+    P := P^.Next;
+    if P = PView(@Self) then Break;
+    if ((P^.Options and ofFramed) <> 0) and
+       ((P^.State and sfVisible) <> 0) then
+    begin
+      I := Y - P^.Origin.Y;
+      if I < 0 then
+      begin
+        if I <> -1 then Continue;
+        EdgeBits := $06; FillBits := $0A;    { row above the subview }
+      end
+      else if I < P^.Size.Y then
+      begin
+        EdgeBits := $05; FillBits := $00;    { row crossing the subview }
+      end
+      else if I = P^.Size.Y then
+      begin
+        EdgeBits := $03; FillBits := $0A;    { row below the subview }
+      end
+      else
+        Continue;
+      MinX := P^.Origin.X;
+      MaxX := MinX + P^.Size.X;
+      if MinX < 1 then MinX := 1;
+      if MaxX > W - 1 then MaxX := W - 1;
+      if MinX >= MaxX then Continue;
+      FrameMask[MinX - 1] := FrameMask[MinX - 1] or EdgeBits;
+      FrameMask[MaxX] := FrameMask[MaxX] or (EdgeBits xor FillBits);
+      if FillBits <> 0 then
+        for I := MinX to MaxX - 1 do
+          FrameMask[I] := FrameMask[I] or FillBits;
+    end;
+  until False;
+  for I := 0 to W - 1 do
+    TWordArray(FrameBuf)[I] :=
+      (Word(Color) shl 8) or Ord(FrameChars[FrameMask[I]]);
 end;
 
 procedure TFrame.Draw;
@@ -2501,15 +2284,17 @@ begin
   TView.Done;
 end;
 
-function TGroup.At(Index: Integer): PView; assembler;
-asm
-        LES     DI,Self
-        LES     DI,ES:[DI].TGroup.Last
-        MOV     CX,Index
-@@1:    LES     DI,ES:[DI].TView.Next
-        LOOP    @@1
-        MOV     AX,DI
-        MOV     DX,ES
+function TGroup.At(Index: Integer): PView;
+var
+  P: PView;
+begin
+  P := Last;
+  while Index > 0 do
+  begin
+    P := P^.Next;
+    Dec(Index);
+  end;
+  At := P;
 end;
 
 procedure TGroup.Awaken;
@@ -2694,38 +2479,23 @@ begin
   FirstMatch := FirstThat(@Matches);
 end;
 
-function TGroup.FirstThat(P: Pointer): PView; assembler;
+function TGroup.FirstThat(P: Pointer): PView;
 var
-  ALast: Pointer;
-asm
-        LES     DI,Self
-        LES     DI,ES:[DI].TGroup.Last
-        MOV     AX,ES
-        OR      AX,DI
-        JE      @@3
-        MOV     WORD PTR ALast[2],ES
-        MOV     WORD PTR ALast[0],DI
-@@1:    LES     DI,ES:[DI].TView.Next
-        PUSH    ES
-        PUSH    DI
-        PUSH    ES
-        PUSH    DI
-        PUSH    WORD PTR [BP]
-        CALL    P
-        POP     DI
-        POP     ES
-        OR      AL,AL
-        JNE     @@2
-        CMP     DI,WORD PTR ALast[0]
-        JNE     @@1
-        MOV     AX,ES
-        CMP     AX,WORD PTR ALast[2]
-        JNE     @@1
-        XOR     DI,DI
-        MOV     ES,DI
-@@2:    MOV     SP,BP
-@@3:    MOV     AX,DI
-        MOV     DX,ES
+  Cur, L0: PView;
+begin
+  FirstThat := nil;
+  if Last = nil then Exit;
+  L0 := Last;
+  Cur := Last;
+  repeat
+    Cur := Cur^.Next;
+    if Boolean(Byte(PtrUInt(CallPointerMethodLocal(P,
+         get_caller_frame(get_frame, get_pc_addr), Cur)))) then
+    begin
+      FirstThat := Cur;
+      Exit;
+    end;
+  until Cur = L0;
 end;
 
 function TGroup.FindNext(Forwards: Boolean): PView;
@@ -2753,35 +2523,20 @@ begin
   if P <> nil then FocusNext := P^.Focus;
 end;
 
-procedure TGroup.ForEach(P: Pointer); assembler;
+procedure TGroup.ForEach(P: Pointer);
 var
-  ALast: Pointer;
-asm
-        LES     DI,Self
-        LES     DI,ES:[DI].TGroup.Last
-        MOV     AX,ES
-        OR      AX,DI
-        JE      @@4
-        MOV     WORD PTR ALast[2],ES
-        MOV     WORD PTR ALast[0],DI
-        LES     DI,ES:[DI].TView.Next
-@@1:    CMP     DI,WORD PTR ALast[0]
-        JNE     @@2
-        MOV     AX,ES
-        CMP     AX,WORD PTR ALast[2]
-        JE      @@3
-@@2:    PUSH    WORD PTR ES:[DI].TView.Next[2]
-        PUSH    WORD PTR ES:[DI].TView.Next[0]
-        PUSH    ES
-        PUSH    DI
-        PUSH    WORD PTR [BP]
-        CALL    P
-        POP     DI
-        POP     ES
-        JMP     @@1
-@@3:    PUSH    WORD PTR [BP]
-        CALL    P
-@@4:
+  Tp, Hp, L0: PView;
+begin
+  if Last = nil then Exit;
+  Tp := Last;
+  Hp := Tp^.Next;
+  L0 := Last;
+  repeat
+    Tp := Hp;
+    if Tp = nil then Exit;
+    Hp := Tp^.Next;
+    CallPointerMethodLocal(P, get_caller_frame(get_frame, get_pc_addr), Tp);
+  until Tp = L0;
 end;
 
 procedure TGroup.FreeBuffer;
@@ -2793,28 +2548,17 @@ end;
 { Allocate a group buffer if the group is exposed, buffered, and
   its area is less than 32768 bytes }
 
-procedure TGroup.GetBuffer; assembler;
-asm
-        LES     DI,Self
-        TEST    ES:[DI].State,sfExposed
-        JZ      @@1
-        TEST    ES:[DI].Options,ofBuffered
-        JZ      @@1
-        MOV     AX,ES:[DI].Buffer.Word[0]
-        OR      AX,ES:[DI].Buffer.Word[2]
-        JNZ     @@1
-        MOV     AX,ES:[DI].TView.Size.X
-        MUL     ES:[DI].TView.Size.Y
-        JO      @@1
-        SHL     AX,1
-        JC      @@1
-        JS      @@1
-        LEA     DI,[DI].TView.Buffer
-        PUSH    ES
-        PUSH    DI
-        PUSH    AX
-        CALL    NewCache
-@@1:
+procedure TGroup.GetBuffer;
+var
+  Sz: LongInt;
+begin
+  if ((State and sfExposed) <> 0) and ((Options and ofBuffered) <> 0) and
+     (Buffer = nil) then
+  begin
+    Sz := LongInt(Size.X) * Size.Y * 2;
+    if (Sz > 0) and (Sz < 32768) then
+      NewCache(Pointer(Buffer), Word(Sz));
+  end;
 end;
 
 procedure TGroup.GetData(var Rec);
@@ -2895,29 +2639,24 @@ begin
   end;
 end;
 
-function TGroup.IndexOf(P: PView): Integer; assembler;
-asm
-        LES     DI,Self
-        LES     DI,ES:[DI].TGroup.Last
-        MOV     AX,ES
-        OR      AX,DI
-        JE      @@3
-        MOV     CX,DI
-        MOV     BX,ES
-        XOR     AX,AX
-@@1:    INC     AX
-        LES     DI,ES:[DI].TView.Next
-        MOV     DX,ES
-        CMP     DI,P.Word[0]
-        JNE     @@2
-        CMP     DX,P.Word[2]
-        JE      @@3
-@@2:    CMP     DI,CX
-        JNE     @@1
-        CMP     DX,BX
-        JNE     @@1
-        XOR     AX,AX
-@@3:
+function TGroup.IndexOf(P: PView): Integer;
+var
+  Cur: PView;
+  I: Integer;
+begin
+  IndexOf := 0;
+  if Last = nil then Exit;
+  Cur := Last;
+  I := 0;
+  repeat
+    Inc(I);
+    Cur := Cur^.Next;
+    if Cur = P then
+    begin
+      IndexOf := I;
+      Exit;
+    end;
+  until Cur = Last;
 end;
 
 procedure TGroup.Insert(P: PView);
@@ -2983,54 +2722,23 @@ begin
   DrawSubViews(First, nil);
 end;
 
-procedure TGroup.RemoveView(P: PView); assembler;
-asm
-        PUSH    DS
-        LDS     SI,Self
-        LES     DI,P
-        LDS     SI,DS:[SI].TGroup.Last
-        PUSH    BP
-        MOV     AX,DS
-        OR      AX,SI
-        JE      @@7
-        MOV     AX,SI
-        MOV     DX,DS
-        MOV     BP,ES
-@@1:    MOV     BX,WORD PTR DS:[SI].TView.Next[0]
-        MOV     CX,WORD PTR DS:[SI].TView.Next[2]
-        CMP     CX,BP
-        JE      @@5
-@@2:    CMP     CX,DX
-        JE      @@4
-@@3:    MOV     SI,BX
-        MOV     DS,CX
-        JMP     @@1
-@@4:    CMP     BX,AX
-        JNE     @@3
-        JMP     @@7
-@@5:    CMP     BX,DI
-        JNE     @@2
-        MOV     BX,WORD PTR ES:[DI].TView.Next[0]
-        MOV     CX,WORD PTR ES:[DI].TView.Next[2]
-        MOV     DS:WORD PTR [SI].TView.Next[0],BX
-        MOV     DS:WORD PTR [SI].TView.Next[2],CX
-        CMP     DX,BP
-        JNE     @@7
-        CMP     AX,DI
-        JNE     @@7
-        CMP     CX,BP
-        JNE     @@6
-        CMP     BX,DI
-        JNE     @@6
-        XOR     SI,SI
-        MOV     DS,SI
-@@6:    POP     BP
-        PUSH    BP
-        LES     DI,Self
-        MOV     WORD PTR ES:[DI].TView.Last[0],SI
-        MOV     WORD PTR ES:[DI].TView.Last[2],DS
-@@7:    POP     BP
-        POP     DS
+procedure TGroup.RemoveView(P: PView);
+var
+  Cur: PView;
+begin
+  if Last = nil then Exit;
+  Cur := Last;
+  repeat
+    if Cur^.Next = P then
+    begin
+      Cur^.Next := P^.Next;
+      if P = Last then
+        if P^.Next = P then Last := nil
+        else Last := Cur;
+      Exit;
+    end;
+    Cur := Cur^.Next;
+  until Cur = Last;
 end;
 
 procedure TGroup.ResetCurrent;

@@ -1,47 +1,38 @@
-(* RUNCMD.INC - NOT RECOVERED. Placeholder, 2026-08-18.
+(* RUNCMD.INC - compile-clean scaffolding, 2026-08-19. NOT the original.
 
-   ============================================================
-    THIS FILE IS A PLACEHOLDER. IT DOES NOT CONTAIN THE CODE.
-   ============================================================
+   The original file is missing from this repository (see TOOLCHAIN.md).
+   It carried the bodies of DNUTIL's command-execution layer:
 
-   Unlike the other five includes missing from this repository, RUNCMD.INC
-   is not a defines file. It is pulled into the IMPLEMENTATION section of
-   DNUTIL.PAS, immediately after that unit's uses clause and just before
-   VERSION.INC, so it supplies procedure and function BODIES - the
-   command-execution layer of DN. It cannot be reconstructed by inference
-   the way DN.DEF, STDEFINE.INC, LINK.INC and VERSION.INC could, and it
-   must not be faked: an empty stub would turn a clear "file missing" into
-   a pile of "identifier not found" errors pointing at the wrong place.
+       ExecString  SearchExt  ExecExtFile  ExecFile
 
-   WHAT IT MUST PROVIDE
-   --------------------
-   DNUTIL.PAS declares these in its interface and implements none of them
-   in the unit body; they are the candidates for this file:
+   This scaffolding exists so the dependency graph can compile - DNUTIL
+   gates the entire UI layer through VIEWS' implementation uses-chain.
+   It is NOT silent: every routine raises RunError(199) the moment it is
+   called, so a running binary cannot appear to work while command
+   execution is missing. Do not ship a build that can reach these.
 
-       ExecString    ExecFile    ExecExtFile    SearchExt
-       EditFile      ViewFile    RunFormat      AddFormat
-       ChgColors
+   Recovery: an original DN 1.51 source distribution, or a back-port of
+   dnexec.pas (769 lines, 32-bit) from the DN Open Source / NDN tree,
+   which contains all four routines' descendants. *)
 
-   Other names in that gap list - InitDesktop, InitMenuBar,
-   InitStatusLine, HandleCommand, LoadDesktop, StoreDesktop, OutOfMemory,
-   EventError - are TApplication method overrides picked up by the same
-   scan and are probably implemented elsewhere; treat the list above as
-   the reliable part.
+procedure ExecString(S: Str128);
+begin
+  RunError(199);   { RUNCMD.INC scaffolding: ExecString not recovered }
+end;
 
-   WHERE TO GET IT
-   ---------------
-   1. An original Dos Navigator 1.51 source distribution (RIT Research
-      Labs) is the correct source of truth.
+function SearchExt(Name: NameStr; Ext: ExtStr; var HS: String): Boolean;
+begin
+  SearchExt := False;
+  RunError(199);   { RUNCMD.INC scaffolding: SearchExt not recovered }
+end;
 
-   2. Failing that, the closest surviving relative is dnexec.pas in the
-      Dos Navigator Open Source / Necromancer's DN tree (769 lines). It
-      contains ExecString, ExecFile, ExecExtFile and SearchExt - i.e. it
-      is the evolved descendant of this file. It is NOT a drop-in: that
-      tree is 32-bit and Win32/OS2-aware, so it would need porting back
-      to 16-bit real mode.
+function ExecExtFile(const ExtFName, FName: PathStr; SIdx: TStrIdx): Boolean;
+begin
+  ExecExtFile := False;
+  RunError(199);   { RUNCMD.INC scaffolding: ExecExtFile not recovered }
+end;
 
-   Until one of those is done, the one unit that includes this file
-   (DNUTIL.PAS) cannot compile, and anything depending on DNUTIL is
-   blocked with it. See TOOLCHAIN.md for the current status. *)
-
-{$MESSAGE ERROR 'RUNCMD.INC is a placeholder - the real file is missing from this repository. See the comment in this file and TOOLCHAIN.md.'}
+procedure ExecFile(Name: PathStr);
+begin
+  RunError(199);   { RUNCMD.INC scaffolding: ExecFile not recovered }
+end;

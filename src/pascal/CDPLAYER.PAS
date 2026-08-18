@@ -309,6 +309,14 @@ function UpdateCrc32(CurByte : Byte; CurCrc : LongInt) : LongInt;
                  ((CurCrc shr 8) and $00FFFFFF);
   *)
 
+{$IFDEF FPC}
+begin
+  { The original TP Inline() machine code implements exactly the
+    'model' expression the author left in the comment above. }
+  UpdateCrc32 := Crc32Table[Byte(CurCrc xor LongInt(CurByte))] xor
+                 ((CurCrc shr 8) and $00FFFFFF);
+end;
+{$ELSE}
 Inline(
                          {;Get args -- DX:BX = CurCrc, CX = CurByte;}
   $5B/                   {        POP     BX}
@@ -338,6 +346,7 @@ Inline(
   $31/$D8/               {        XOR     AX,BX}
   $89/$CB/               {        MOV     BX,CX}
   $31/$DA);              {        XOR     DX,BX}
+{$ENDIF}
 
 
 Function GetCrc( var Buf ; BufSize : word ) : Longint ;
@@ -1094,8 +1103,8 @@ end;
         for I := LowTrack to HighTrack do
          C^.Insert(NewStr(
                  SStr( I- LowTrack +1 ,2,' ' ) + ' ³ ' +
-               + SStr( Tlen[I].Lmin,2,' ' ) + ':' +
-               + SStr( Tlen[I].Lsec,2,'0' ) + ' ³ ' +
+                 SStr( Tlen[I].Lmin,2,' ' ) + ':' +
+                 SStr( Tlen[I].Lsec,2,'0' ) + ' ³ ' +
                CnvString(Descr^.At(I))
          ));
       MakeTrackList := C ;
@@ -2083,7 +2092,7 @@ begin
           {fillChar( UpdCnt, SizeOf( UpdCnt ), 0 );}
           Update;
         end;
-      cdZoom: Zoom;
+      { second cdZoom arm removed: dead under TP first-match case semantics }
       cdTitle: begin
                       GetDescription;
                       EditDescr(@Self);

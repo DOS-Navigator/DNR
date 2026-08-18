@@ -1605,7 +1605,7 @@ procedure TCalcView.InsertLineCol;
 procedure RewriteFormula;
  const Signs = [';','[',']','{','}',#39,':','"','.','<', ' ',
                 '>',',','/','?','\','-','=','|','_','(',
-                ')','*','&','^','%','$',' ','!','~','+'];
+                ')','*','&','^','%','$','!','~','+'];
  var S, S1 : String;
      X: Byte;
      I, Y: Integer;
@@ -1661,7 +1661,7 @@ procedure TCalcView.DeleteLineCol;
  procedure RewriteFormula;
   const Signs = [';','[',']','{','}',#39,':','"','.','<', ' ',
                  '>',',','/','?','\','-','=','|','_','(',
-                 ')','*','&','^','%','$',' ','!','~','+'];
+                 ')','*','&','^','%','$','!','~','+'];
   var S, S1 : String;
       X: Byte;
       I, Y: Integer;

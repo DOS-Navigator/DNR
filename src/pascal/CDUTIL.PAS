@@ -181,14 +181,14 @@ Unit CdUtil;
            if Pos(Char(T),ASel)=0 then
              C^.Insert(NewStr(
                      SStr( I ,3,' ' ) + ' ³ ' +
-                   + SStr( Tlen[T].Lmin,2,' ' ) + ':' +
-                   + SStr( Tlen[T].Lsec,2,'0' ) + ' ³ ' +
+                     SStr( Tlen[T].Lmin,2,' ' ) + ':' +
+                     SStr( Tlen[T].Lsec,2,'0' ) + ' ³ ' +
                    CnvString(Descr^.At(I-1))
              )) else
              C^.Insert(NewStr(
                   '*' + SStr( I ,2,' ' ) + ' ³ ' +
-                   + SStr( Tlen[T].Lmin,2,' ' ) + ':' +
-                   + SStr( Tlen[T].Lsec,2,'0' ) + ' ³ ' +
+                     SStr( Tlen[T].Lmin,2,' ' ) + ':' +
+                     SStr( Tlen[T].Lsec,2,'0' ) + ' ³ ' +
                    CnvString(Descr^.At(I-1))
              ))
 
@@ -197,8 +197,8 @@ Unit CdUtil;
          else
           C^.Insert(NewStr(
                  SStr( T ,3,' ' ) + ' ³ ' +
-               + SStr( Tlen[T].Lmin,2,' ' ) + ':' +
-               + SStr( Tlen[T].Lsec,2,'0' ) + ' ³ ' +
+                 SStr( Tlen[T].Lmin,2,' ' ) + ':' +
+                 SStr( Tlen[T].Lsec,2,'0' ) + ' ³ ' +
                CnvString(Descr^.At(T-LowTrack))
          ))
         end;
@@ -217,8 +217,8 @@ Unit CdUtil;
            begin
             I := FirstTrack+Item;
             S := SStr( Item+1,2,' '      ) + ' ³ ' +
-               + SStr( Tlen[I].Lmin,2,' ' ) + ':' +
-               + SStr( Tlen[I].Lsec,2,'0' ) + ' ³ ' +
+                 SStr( Tlen[I].Lmin,2,' ' ) + ':' +
+                 SStr( Tlen[I].Lsec,2,'0' ) + ' ³ ' +
                CnvString(Decr^.At(I));
            end;
         GetText := S;

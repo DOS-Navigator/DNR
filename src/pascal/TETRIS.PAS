@@ -322,7 +322,7 @@ begin
  MoveChar(B[Size.X-1], '³', C, 1);
  WriteLine(0,12,Size.X,1,B);
  MoveChar(B, ' ', C, Size.X);
- MoveCStr(B,+GetString(dlGameScore) + ItoS(Gm^.HiScores[1+10*byte(Gm^.Pentix)].Score), C);
+ MoveCStr(B, GetString(dlGameScore) + ItoS(Gm^.HiScores[1+10*byte(Gm^.Pentix)].Score), C);
  MoveChar(B[Size.X-1], '³', C, 1);
  WriteLine(0,13,Size.X,1,B);
  MoveChar(B, 'Ä', C, Size.X);

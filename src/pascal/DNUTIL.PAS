@@ -459,7 +459,7 @@ var
   Event: TEvent;
 
 const
-  NumRElms = 136
+  NumRElms = 136 {$IFNDEF Game} -3 {$ENDIF}
   {$IFDEF MODEM}
   +9
   {$ENDIF}

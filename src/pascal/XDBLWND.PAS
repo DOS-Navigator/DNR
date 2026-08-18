@@ -160,7 +160,7 @@ begin
                { cmGetDirName removed: already handled by the cmPushName arm above; TP matched first, so this occurrence was dead }
                cmPanelCompare,
                cmDiskInfo,
-               cmChangeDirectory,
+               { cmChangeDirectory removed: it has its own arm above; TP matched first, so this occurrence was dead }
                cmLoadViewFile,
                cmGLoadViewFile,
                cmEnableView,

@@ -267,3 +267,38 @@ Also open: RUNCMD.INC (missing code, DNUTIL blocked), COPY.PAS (orphan
 include-file, no unit header, nothing includes it), MODEMIO/COMLNKIO
 (need OOCOM/apFossil, Modem subsystem off), OVERLAYS (BP overlay manager,
 NO_OVERLAY set).
+
+---
+
+# Session 4: the VIEWS wall is down - 56 units compile
+
+All 23 assembler routines in VIEWS.PAS are ported to Pascal. The write
+engine (WriteView -> DoWriteView/DoWriteViewRec1/2) and Exposed follow
+FPC Free Vision's implementations, with the buffer stride changed to
+G^.Size.X because DN/TV2 allocate per-window buffers (FV has only the
+screen-wide one; the models agree on the top group). Local-function
+callbacks (ForEach/FirstThat) use FV's frame-passing helpers verbatim -
+that convention must not be hand-derived. TFrame.FrameLine keeps its
+CP866 FrameChars table untouched; only the asm became Pascal.
+
+The whole UI layer now compiles: DIALOGS, MENUS, DNAPP, DNSTDDLG,
+SETUPS, EDITOR, COLORSEL, PHONES, XDBLWND, FIXER, MACRO, REANIMAT,
+DNFORMAT and more - 56 ppus from one DN.PAS build.
+
+RUNCMD.INC now carries compile-clean scaffolding: correct signatures,
+each raising RunError(199) if ever called, so the graph compiles while
+the missing original remains loudly missing. STDEFINE.INC now enables
+the feature set DN 1.51 shipped with, because DNUTIL's registration
+table hard-codes NumRElms=136 for it. Game is OFF: TETRIS.PAS trips FPC
+internal error 200309041 (a compiler bug, not source); NumRElms adjusts
+by -3 under IFNDEF Game.
+
+More original-1999 bugs fixed, all dead code under TP semantics:
+doubled-plus string concatenations (CDUTIL x4, CDPLAYER x2, TETRIS
+unary form), a duplicate cdZoom case arm (CDPLAYER), a duplicate
+cmChangeDirectory arm (XDBLWND), duplicate ' ' set elements (CALC x2).
+CDPLAYER's Inline() CRC32 became the Pascal its own comment documented.
+
+Current DN.PAS blocker: DNUTIL implementation - identifier SaveDsk
+(1635 etc., a UserSaver-family global) and one more duplicate case
+label at 1964. The funnel is now entirely inside DNUTIL.

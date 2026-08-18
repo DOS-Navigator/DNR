@@ -42,8 +42,30 @@
 
 { ------------------------------------------------------------- features }
 
+{ DNUTIL's stream-registration table hard-codes NumRElms = 136 for the
+  feature set DN 1.51 actually shipped with, so "minimal" defines make the
+  array count wrong. These are the shipped defaults; only MODEM stays off
+  (its OOCOM/apFossil comm units are not in this repository). }
 {$DEFINE UUENCODE}
 {$DEFINE UUDECODE}
+{$DEFINE SS}
+{$DEFINE CHCOL}
+{ Game OFF: TETRIS.PAS trips FPC internal error 200309041 (compiler bug); DNUTIL adjusts NumRElms }
+{$DEFINE TrashCan}
+{$DEFINE Calendar}
+{$DEFINE DBView}
+{$DEFINE DiskEdit}
+{$DEFINE DiskFormat}
+{$DEFINE Reanimator}
+{$DEFINE PrintManager}
+{$DEFINE SpreadSheet}
+{$DEFINE CdPlayer}
+{$DEFINE MEMINFO}
+{$DEFINE SYSINFO}
+{$DEFINE ARVID}
+{$DEFINE PHONES}
+{$DEFINE DisAsm}
+{$DEFINE UserSaver}
 
 { --- overlays: DN 1.51 used the BP7 overlay manager; FPC has none and a
       first build does not need one --- }
