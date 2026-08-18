@@ -75,3 +75,71 @@ The project is currently blocked due to a non-functional and inconsistent develo
 The environment must be repaired to provide the following before work can continue:
 1.  A functional file system where all tools can consistently see and access all files within the repository.
 2.  A working FreePascal Compiler installation that is capable of compiling for, at a minimum, the native Linux target, and ideally, the i8086-dos cross-compilation target.
+
+---
+
+# Update 2026-08-18: unblocked on native Windows
+
+The blockage recorded above was environmental, not intrinsic. Re-run on a
+native Windows 11 host (no WSL, Cygwin, MSYS or DOSBox), every blocker
+listed under "Current Status: Blocked" is resolved.
+
+## 1. Filesystem inconsistency - not reproducible
+
+Did not occur. All tools see the repository consistently.
+
+## 2. `ppc8086` - obtained and working
+
+The missing i8086 cross-compiler is distributed as a prebuilt installer,
+so neither `make crossinstall` nor DJGPP is needed:
+
+    fpc-3.2.2.i386-win32.cross.i8086-msdos.exe   (169 MB, SourceForge)
+
+It installs `ppcross8086.exe` (note the name - it is *not* `ppc8086.exe`)
+plus 24 sets of RTL units covering `tiny/small/medium/compact/large/huge`
+for 8086/80186/80286/80386, and it bundles its own `nasm.exe`, which FPC
+uses as the i8086 assembler.
+
+**Verified**: a Pascal program compiles to a genuine 16-bit DOS `MZ`
+executable (MZ magic present, no PE signature).
+
+Three things that are easy to get wrong, each of which produces a
+misleading error:
+
+* Units live in an `rtl` **subdirectory** of the model directory. Pointing
+  `-Fu` at the model directory itself gives `Can't find unit system`.
+* `-XX` (smart linking) is **mandatory**. The RTL ships `.a` archives, so
+  without it the link fails with `Can't open object file: system.o`, which
+  reads like a missing file rather than a missing flag.
+* FPC's own `nasm.exe` must be on `PATH`.
+
+Working invocation and the full toolchain table are in `TOOLCHAIN.md`.
+
+## 3. Assembly conversion is now automated
+
+The hand conversions recorded above (`_MHZ`, `VGA33`, `SYSINT`) are
+superseded by a working transpiler:
+[DOS-Navigator/T2NT](https://github.com/DOS-Navigator/T2NT), branch
+`mvp-native-windows`.
+
+All ten TASM modules transpile; two (`VGA33`, `_MHZ`) currently assemble
+clean under NASM 3.02. The transpiler's `VGA33` output is **byte-identical
+(SHA-256)** to the hand-converted `VGA33.com` committed on this branch,
+which is what validates the approach.
+
+Run `build-asm.bat` to regenerate and assemble everything.
+
+## Revised next steps
+
+1. Close the remaining T2NT gaps until all ten modules assemble
+   (see `STATUS.md` in that repository).
+2. Build DN for **i8086-msdos** first, now that the compiler works. This
+   validates that the Turbo Pascal sources compile at all under FPC.
+3. Only then port to native Win32. DN is Turbo Pascal 7 + Turbo Vision in
+   16-bit real mode: 99 units on `Objects`/`Views`/`Drivers`/`Dialogs` and
+   `Dos`, with direct video memory access and interrupt calls. Targeting
+   Win32 means porting to Free Vision and replacing every DOS dependency -
+   a porting project, not a build-configuration change.
+
+Attempting step 3 before step 2 means debugging a port and a toolchain
+simultaneously.
