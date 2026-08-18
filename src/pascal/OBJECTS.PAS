@@ -443,11 +443,24 @@ procedure DisposeStr(P: PString);
 
 { Longint routines }
 
+{ FPC has no equivalent of Turbo Pascal's inline($xx/$yy) machine-code
+  directive, so under FPC these become ordinary forward declarations and
+  are implemented in the implementation section below.
+
+  Original encodings, kept for the BP7 build:
+    LongMul  5A       pop dx      (Y)
+             58       pop ax      (X)
+             F7 EA    imul dx     -> DX:AX = X*Y, signed
+    LongDiv  59       pop cx      (Y)
+             58       pop ax      (X low)
+             5A       pop dx      (X high)
+             F7 F9    idiv cx     -> AX = X div Y, signed }
+
 function LongMul(X, Y: Integer): Longint;
-inline($5A/$58/$F7/$EA);
+{$IFNDEF FPC} inline($5A/$58/$F7/$EA); {$ENDIF}
 
 function LongDiv(X: Longint; Y: Integer): Integer;
-inline($59/$58/$5A/$F7/$F9);
+{$IFNDEF FPC} inline($59/$58/$5A/$F7/$F9); {$ENDIF}
 
 { Stream routines }
 
@@ -513,6 +526,22 @@ const
 {$ENDIF}
 
 implementation
+
+{$IFDEF FPC}
+{ Portable replacements for the inline() machine code declared above.
+  Semantically identical: the original opcodes are a signed 16x16->32
+  multiply and a signed 32/16 divide. }
+
+function LongMul(X, Y: Integer): Longint;
+begin
+  LongMul := Longint(X) * Longint(Y);
+end;
+
+function LongDiv(X: Longint; Y: Integer): Integer;
+begin
+  LongDiv := X div Y;
+end;
+{$ENDIF}
 
 {$IFDEF Windows}
 uses WinProcs, Strings, OMemory;

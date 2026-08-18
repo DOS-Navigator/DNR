@@ -703,6 +703,12 @@ begin
   NewSItem := Item;
 end;
 
+{$IFDEF FPC}
+function Max(A, B: Integer): Integer;
+begin
+  if A > B then Max := A else Max := B;
+end;
+{$ELSE}
 function Max(A, B: Integer): Integer;
 inline(
    $58/     {pop   ax   }
@@ -711,6 +717,7 @@ inline(
    $7F/$01/ {jg    @@1  }
    $93);    {xchg  ax,bx}
        {@@1:            }
+{$ENDIF}
 
 { TInputLine }
 
@@ -785,7 +792,7 @@ begin
   MoveChar(B, ' ', Color, Size.X);
   S := Copy(Data^, FirstPos + 1, Size.X - 2 * DrawShift);
   MoveStr(B[DrawShift], S, Color);
-  if Options and ofSecurity <> 0 then MoveChar(B[DrawShift], 'þ', Color, Length(S));
+  if Options and ofSecurity <> 0 then MoveChar(B[DrawShift], 'ï¿½', Color, Length(S));
   if DrawShift > 0 then
     begin
       if CanScroll(1) then MoveChar(B[Size.X - 1], #16, GetColor(4), 1)
@@ -1243,9 +1250,9 @@ begin
       if ShowMarkers then Ch := ' ' else
       begin
         if Y = 0 then
-          WordRec(B[S]).Lo := Byte('Ü') else
-          WordRec(B[S]).Lo := Byte('Û');
-        Ch := 'ß';
+          WordRec(B[S]).Lo := Byte('ï¿½') else
+          WordRec(B[S]).Lo := Byte('ï¿½');
+        Ch := 'ï¿½';
       end;
       I := 1;
     end;
@@ -2236,7 +2243,7 @@ begin
   FreeStr := HistoryStr(HistoryID, Item);
   FreeStr := CnvString(HistList.CurString);
   C := ' ';
-  if FreeStr[Length(FreeStr)] = '+' then C := 'þ';
+  if FreeStr[Length(FreeStr)] = '+' then C := 'ï¿½';
   Insert(C, FreeStr, 1);
   GetText := Copy(FreeStr, 1, Length(FreeStr)-1);
 end;

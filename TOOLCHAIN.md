@@ -74,3 +74,61 @@ Windows natively.
 3. Only then port to native Win32 via Free Vision.
 
 Doing 3 before 2 means debugging a port and a toolchain simultaneously.
+
+---
+
+# Pascal bring-up: measured status 2026-08-18
+
+## Missing includes: 5 of 6 recovered
+
+| File | Status |
+|---|---|
+| `VERSION.INC` | **Recovered exactly.** `VERSION.PAS` in this repo is not a unit - it is a *generator program* whose tail writes this file. Values taken from its own constants: `1.51`, `April 19, 1999`, `$0133`. |
+| `DN.DEF` | Reconstructed (defines-only): `DN`, `DNPRG`. |
+| `STDEFINE.INC` | Reconstructed (defines-only), deliberately minimal - optional subsystems start OFF. |
+| `LINK.INC` | Reconstructed (defines-only). Proven defines-only because `LINKTYP.PAS` includes it *before* `interface`. |
+| `OS2IO.INC` | Placeholder. Only reachable under `{$IFDEF OS2}`, which is off, so it is not needed for a DOS build. |
+| `RUNCMD.INC` | **NOT recovered - genuinely missing code.** Included into DNUTIL's *implementation*, so it holds procedure bodies (`ExecString`, `ExecFile`, `ExecExtFile`, `SearchExt`, ...). Closest surviving relative is `dnexec.pas` (769 lines) in the Dos Navigator Open Source / NDN tree, which is 32-bit and would need porting back. |
+
+## Turbo Pascal `inline()` machine code: fixed
+
+FPC does not support TP's `inline($5A/$58/...)` directive. All **7 sites**
+(OBJECTS.PAS x2, UUCODE.PAS x3, DIALOGS.PAS x1, counting the pairs) are now
+guarded with `{$IFDEF FPC}` and given portable Pascal bodies. The original
+opcodes are preserved in comments and the BP7 path is unchanged. The two in
+OBJECTS.PAS were in the *interface* section, so their bodies moved to the
+implementation.
+
+## Compile results: 4 of 99 units
+
+`COMMANDS`, `DNHELP`, `OBJTYPE`, `STRINGS` compile for i8086-msdos.
+Dominant failures:
+
+| Count | Cause |
+|---|---|
+| 63 | `Illegal expression` - almost all are `VmtLink: Ofs(TypeOf(T)^)` in Turbo Vision stream-registration records |
+| ~16 | `Can't find unit dos` - **not a path problem**, see below |
+| 8 | Syntax errors (assorted TP-isms) |
+
+## The finding that shapes the port: unit-name collisions
+
+**10 DNR units have the same names as FPC RTL / Free Vision units:**
+
+    ASCIITAB  DIALOGS  DRIVERS  HISTLIST  MEMORY
+    MENUS     OBJECTS  STRINGS  VALIDATE  VIEWS
+
+This is why `dos` "cannot be found": DNR's `STRINGS` shadows the RTL's
+`strings`, so FPC tries to recompile `dos` against the wrong unit and gives
+up. The error names the wrong thing entirely.
+
+Consequences:
+
+* Putting `src/pascal` on the unit path **breaks the RTL**.
+* Removing it means losing DNR's own forked Turbo Vision (~16,600 lines
+  across OBJECTS/VIEWS/DRIVERS/DIALOGS/MENUS/COLORSEL/VALIDATE/HISTLIST).
+
+So the first real decision in this port is a **namespace strategy**, not a
+compatibility shim: either rename DNR's forked units (e.g. `dnObjects`), or
+build them as a package that deliberately replaces Free Vision. That choice
+has to be made before the 63 `Ofs(TypeOf(...))` sites are worth touching,
+because it determines which `TStreamRec` they must satisfy.

@@ -69,7 +69,16 @@ uses Dos
      HistList, DNStdDlg, DNUtil
 {$ENDIF};
 
+{ 5A pop dx / 58 pop ax / F7 E2 mul dx -> DX:AX, UNSIGNED (Word operands).
+  The Longint casts are required: Word*Word would wrap at 16 bits. }
+{$IFDEF FPC}
+function longmul(X, Y: Word): Longint;
+begin
+  longmul := Longint(X) * Longint(Y);
+end;
+{$ELSE}
 function longmul(X, Y: Word): Longint; inline($5A/$58/$f7/$E2);
+{$ENDIF}
 
 
 const
@@ -164,8 +173,22 @@ type
         TFileArr = array[1..1500] of TFile;
         PFileArr = ^TFileArr;
 
+{ 58 pop ax (a2) / 5B pop bx (a1) / 3B C3 cmp ax,bx /
+  7C(jl) or 7F(jg) skip / 93 xchg ax,bx  -> signed min / max }
+{$IFDEF FPC}
+function Min(a1,a2:integer):integer;
+begin
+  if a1 < a2 then Min := a1 else Min := a2;
+end;
+
+function Max(a1,a2:integer):integer;
+begin
+  if a1 > a2 then Max := a1 else Max := a2;
+end;
+{$ELSE}
 function  Min(a1,a2:integer):integer;inline($58/$5B/$3B/$C3/$7C/$01/$93);
 function  Max(a1,a2:integer):integer;inline($58/$5B/$3B/$C3/$7F/$01/$93);
+{$ENDIF}
 
 const
         GrowStep=16;
@@ -858,13 +881,13 @@ begin
   if not ValidWNumber(TmpCRC) then Exit;
   if TmpCRC<>WholeSectCRC then
   begin
-   LocalError(GetString(dlleCRC_Err)+' Ä '+CurPFile^.FName+', '+GetString(dlleSection)+' '+ItoS(CurSectNo));
+   LocalError(GetString(dlleCRC_Err)+' ï¿½ '+CurPFile^.FName+', '+GetString(dlleSection)+' '+ItoS(CurSectNo));
   end;
   AuxT:=Num;
   if not ValidLNumber(s) then Exit;
   if s<>SectSSz then
   begin
-   LocalError(GetString(dlleSizeMism)+' Ä '+CurPFile^.FName+', '+GetString(dlleSection)+' '+ItoS(CurSectNo));
+   LocalError(GetString(dlleSizeMism)+' ï¿½ '+CurPFile^.FName+', '+GetString(dlleSection)+' '+ItoS(CurSectNo));
   end;
   CheckS:=On;
  end else
