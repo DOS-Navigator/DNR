@@ -168,13 +168,13 @@ type
 const
       RFindDrive: TStreamRec = (
        ObjType: otFindDrive;
-       VmtLink: Ofs(TypeOf(TFindDrive)^);
+       VmtLink: TypeOf(TFindDrive);
        Load: @TFindDrive.Load;
        Store: @TFindDrive.Store);
 
       RTempDrive: TStreamRec = (
        ObjType: otTempDrive;
-       VmtLink: Ofs(TypeOf(TTempDrive)^);
+       VmtLink: TypeOf(TTempDrive);
        Load: @TTempDrive.Load;
        Store: @TTempDrive.Store);
 

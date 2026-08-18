@@ -148,31 +148,31 @@ const
 
   RFileViewer: TStreamRec = (
      ObjType: otFileViewer;
-     VmtLink: Ofs(TypeOf(TFileViewer)^);
+     VmtLink: TypeOf(TFileViewer);
      Load:    @TFileViewer.Load;
      Store:   @TFileViewer.Store
   );
   RFileWindow: TStreamRec = (
      ObjType: otFileWindow;
-     VmtLink: Ofs(TypeOf(TFileWindow)^);
+     VmtLink: TypeOf(TFileWindow);
      Load:    @TFileWindow.Load;
      Store:   @TFileWindow.Store
   );
   RViewScroll: TStreamRec = (
      ObjType: otViewScroll;
-     VmtLink: Ofs(TypeOf(TViewScroll)^);
+     VmtLink: TypeOf(TViewScroll);
      Load:    @TViewScroll.Load;
      Store:   @TViewScroll.Store
   );
   RHFileViewer: TStreamRec = (
      ObjType: otHFileViewer;
-     VmtLink: Ofs(TypeOf(THFileViewer)^);
+     VmtLink: TypeOf(THFileViewer);
      Load:    @THFileViewer.Load;
      Store:   @THFileViewer.Store
   );
   RViewInfo  : TStreamRec = (
      ObjType: otViewInfo;
-     VmtLink: Ofs(TypeOf(TViewInfo)^);
+     VmtLink: TypeOf(TViewInfo);
      Load:    @TViewInfo.Load;
      Store:   @TViewInfo.Store
    );

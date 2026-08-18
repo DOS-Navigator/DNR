@@ -224,7 +224,7 @@ function WindowColorItems(const Next: PColorItem): PColorItem;
 const
   RColorSelector: TStreamRec = (
      ObjType: otColorSelector;
-     VmtLink: Ofs(TypeOf(TColorSelector)^);
+     VmtLink: TypeOf(TColorSelector);
      Load:    @TColorSelector.Load;
      Store:   @TColorSelector.Store
   );
@@ -232,7 +232,7 @@ const
 const
   RMonoSelector: TStreamRec = (
      ObjType: otMonoSelector;
-     VmtLink: Ofs(TypeOf(TMonoSelector)^);
+     VmtLink: TypeOf(TMonoSelector);
      Load:    @TMonoSelector.Load;
      Store:   @TMonoSelector.Store
   );
@@ -240,7 +240,7 @@ const
 const
   RColorDisplay: TStreamRec = (
      ObjType: otColorDisplay;
-     VmtLink: Ofs(TypeOf(TColorDisplay)^);
+     VmtLink: TypeOf(TColorDisplay);
      Load:    @TColorDisplay.Load;
      Store:   @TColorDisplay.Store
   );
@@ -248,7 +248,7 @@ const
 const
   RColorGroupList: TStreamRec = (
      ObjType: otColorGroupList;
-     VmtLink: Ofs(TypeOf(TColorGroupList)^);
+     VmtLink: TypeOf(TColorGroupList);
      Load:    @TColorGroupList.Load;
      Store:   @TColorGroupList.Store
   );
@@ -256,7 +256,7 @@ const
 const
   RColorItemList: TStreamRec = (
      ObjType: otColorItemList;
-     VmtLink: Ofs(TypeOf(TColorItemList)^);
+     VmtLink: TypeOf(TColorItemList);
      Load:    @TColorItemList.Load;
      Store:   @TColorItemList.Store
   );
@@ -264,7 +264,7 @@ const
 const
   RColorDialog: TStreamRec = (
      ObjType: otColorDialog;
-     VmtLink: Ofs(TypeOf(TColorDialog)^);
+     VmtLink: TypeOf(TColorDialog);
      Load:    @TColorDialog.Load;
      Store:   @TColorDialog.Store
   );
@@ -272,7 +272,7 @@ const
 const
   R_BWSelector: TStreamRec = (
      ObjType: otR_BWSelector;
-     VmtLink: Ofs(TypeOf(T_BWSelector)^);
+     VmtLink: TypeOf(T_BWSelector);
      Load:    @T_BWSelector.Load;
      Store:   @T_BWSelector.Store
   );

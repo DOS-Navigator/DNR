@@ -105,25 +105,25 @@ const Printer: PPrintManager = nil;
 
       RStringCol: TStreamRec = (
        ObjType: otStringCol;
-       VmtLink: Ofs(TypeOf(TStringCol)^);
+       VmtLink: TypeOf(TStringCol);
        Load: @TStringCol.Load;
        Store: @TStringCol.Store);
 
       RPrintManager: TStreamRec = (
        ObjType: otPrintManager;
-       VmtLink: Ofs(TypeOf(TPrintManager)^);
+       VmtLink: TypeOf(TPrintManager);
        Load: @TPrintManager.Load;
        Store: @TPrintManager.Store);
 
       RPrintStatus: TStreamRec = (
        ObjType: otPrintStatus;
-       VmtLink: Ofs(TypeOf(TPrintStatus)^);
+       VmtLink: TypeOf(TPrintStatus);
        Load: @TPrintStatus.Load;
        Store: @TPrintStatus.Store);
 
       RPMWindow: TStreamRec = (
        ObjType: otPMWindow;
-       VmtLink: Ofs(TypeOf(TPMWindow)^);
+       VmtLink: TypeOf(TPMWindow);
        Load: @TPMWindow.Load;
        Store: @TPMWindow.Store);
 

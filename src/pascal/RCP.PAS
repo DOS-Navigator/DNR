@@ -321,7 +321,7 @@ type
 const
   REditSaver: TStreamRec = (
     ObjType: 12335;
-    VmtLink: Ofs(TypeOf(TEditSaver)^);
+    VmtLink: TypeOf(TEditSaver);
     Load: @TEditSaver.Load;
     Store: @TEditSaver.Store);
 

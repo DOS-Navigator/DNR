@@ -237,37 +237,37 @@ const
 
       RFileEditor: TStreamRec = (
        ObjType: otFileEditor;
-       VmtLink: Ofs(TypeOf(TFileEditor)^);
+       VmtLink: TypeOf(TFileEditor);
        Load: @TFileEditor.Load;
        Store: @TFileEditor.Store);
 
       RInfoLine: TStreamRec = (
        ObjType: otInfoLine;
-       VmtLink: Ofs(TypeOf(TInfoLine)^);
+       VmtLink: TypeOf(TInfoLine);
        Load: @TInfoLine.Load;
        Store: @TInfoLine.Store);
 
       REditWindow: TStreamRec = (
        ObjType: otEditWindow;
-       VmtLink: Ofs(TypeOf(TEditWindow)^);
+       VmtLink: TypeOf(TEditWindow);
        Load: @TEditWindow.Load;
        Store: @TEditWindow.Store);
 
       REditScrollBar: TStreamRec = (
        ObjType: otEditScrollBar;
-       VmtLink: Ofs(TypeOf(TEditScrollBar)^);
+       VmtLink: TypeOf(TEditScrollBar);
        Load: @TEditScrollBar.Load;
        Store: @TEditScrollBar.Store);
 
       REditFrame: TStreamRec = (
        ObjType: otEditFrame;
-       VmtLink: Ofs(TypeOf(TEditFrame)^);
+       VmtLink: TypeOf(TEditFrame);
        Load: @TEditFrame.Load;
        Store: @TEditFrame.Store);
 
       RLineCollection: TStreamRec = (
        ObjType: otLineCollection;
-       VmtLink: Ofs(TypeOf(TLineCollection)^);
+       VmtLink: TypeOf(TLineCollection);
        Load: @TLineCollection.Load;
        Store: @TLineCollection.Store);
 
@@ -319,7 +319,7 @@ type
 const
       REditSaver: TStreamRec = (
        ObjType: 12335;
-       VmtLink: Ofs(TypeOf(TEditSaver)^);
+       VmtLink: TypeOf(TEditSaver);
        Load: @TEditSaver.Load;
        Store: @TEditSaver.Store);
 

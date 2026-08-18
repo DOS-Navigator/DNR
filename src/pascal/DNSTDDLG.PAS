@@ -224,7 +224,7 @@ const
 const
   RFileInputLine: TStreamRec = (
      ObjType: otFileInputLine;
-     VmtLink: Ofs(TypeOf(TFileInputLine)^);
+     VmtLink: TypeOf(TFileInputLine);
      Load:    @TFileInputLine.Load;
      Store:   @TFileInputLine.Store
   );
@@ -232,7 +232,7 @@ const
 const
   RFileCollection: TStreamRec = (
      ObjType: otFileCollection;
-     VmtLink: Ofs(TypeOf(TFileCollection)^);
+     VmtLink: TypeOf(TFileCollection);
      Load:    @TFileCollection.Load;
      Store:   @TFileCollection.Store
   );
@@ -240,7 +240,7 @@ const
 const
   RFileList: TStreamRec = (
      ObjType: otFileList;
-     VmtLink: Ofs(TypeOf(TFileList)^);
+     VmtLink: TypeOf(TFileList);
      Load:    @TFileList.Load;
      Store:   @TFileList.Store
   );
@@ -248,7 +248,7 @@ const
 const
   RFileInfoPane: TStreamRec = (
      ObjType: otFileInfoPane;
-     VmtLink: Ofs(TypeOf(TFileInfoPane)^);
+     VmtLink: TypeOf(TFileInfoPane);
      Load:    @TFileInfoPane.Load;
      Store:   @TFileInfoPane.Store
   );
@@ -256,7 +256,7 @@ const
 const
   RFileDialog: TStreamRec = (
      ObjType: otFileDialog;
-     VmtLink: Ofs(TypeOf(TFileDialog)^);
+     VmtLink: TypeOf(TFileDialog);
      Load:    @TFileDialog.Load;
      Store:   @TFileDialog.Store
   );
@@ -264,7 +264,7 @@ const
 const
   RSortedListBox: TStreamRec = (
      ObjType: otSortedListBox;
-     VmtLink: Ofs(TypeOf(TSortedListBox)^);
+     VmtLink: TypeOf(TSortedListBox);
      Load:    @TSortedListBox.Load;
      Store:   @TSortedListBox.Store
   );

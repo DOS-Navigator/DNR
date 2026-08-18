@@ -111,7 +111,7 @@ type
 const
       RDirStorage: TStreamRec = (
        ObjType: otDirStorage;
-       VmtLink: Ofs(TypeOf(TDirStorage)^);
+       VmtLink: TypeOf(TDirStorage);
        Load: @TDirStorage.Load;
        Store: @TDirStorage.Store);
 

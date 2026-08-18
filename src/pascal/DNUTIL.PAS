@@ -249,7 +249,7 @@ type
 const
       RDataSaver: TStreamRec = (
        ObjType: otDataSaver;
-       VmtLink: Ofs(TypeOf(TDataSaver)^);
+       VmtLink: TypeOf(TDataSaver);
        Load: @TDataSaver.Load;
        Store: @TDataSaver.Store);
 

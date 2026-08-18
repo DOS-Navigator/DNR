@@ -132,3 +132,72 @@ compatibility shim: either rename DNR's forked units (e.g. `dnObjects`), or
 build them as a package that deliberately replaces Free Vision. That choice
 has to be made before the 63 `Ofs(TypeOf(...))` sites are worth touching,
 because it determines which `TStreamRec` they must satisfy.
+
+---
+
+# Session 2: low-hanging fruit, measured 2026-08-18
+
+## Headline
+
+Unit count moved 4 -> 5 (i8086-msdos). That understates the change: the
+whole codebase still funnels through **OBJECTS.PAS**, which 63 units depend
+on, and that file went from 5 blocking errors to 3 with its entire stream
+architecture ported off 16-bit assembly.
+
+**Repeated error counts are misleading in this project.** "63 errors" has
+meant, at every stage so far, *one or three unique sites in OBJECTS.PAS,
+recompiled once per dependent unit*. Always de-duplicate before sizing work.
+
+## Done
+
+* **158 `Ofs(TypeOf(X)^)` sites converted to `TypeOf(X)`** across 40 files.
+  Established by experiment that this was unavoidable: with `VmtLink: Word`,
+  all three candidate spellings (`Ofs(TypeOf(T)^)`, `Ofs(TypeOf(T))`,
+  `Word(TypeOf(T))`) are rejected; only `VmtLink: Pointer` + `TypeOf(T)`
+  compiles.
+* **`TStreamRec` ported to the shape FPC's own Free Vision uses**:
+  `VmtLink: Pointer`, `Next: PStreamRec`, `StreamTypes: PStreamRec`.
+* **Four assembler routines rewritten in Pascal** - `RegisterType`,
+  `ReRegisterType`, `TStream.Get`, `TStream.Put` - following
+  `packages/rtl-extra/src/inc/objects.pp` rather than inventing the ABI.
+  The constructor dispatch goes through `CallPointerConstructor` /
+  `CallPointerMethod`, whose helper types are copied verbatim from FPC.
+  Hand-rolling that would have compiled and been silently wrong.
+
+## Defects found and fixed in earlier work on this branch
+
+* **`MEMORY.PAS` had an unbalanced conditional** - 4 opens, 3 closes. The
+  `{$IFDEF MODERN}` block added previously was never closed.
+* **`compat.inc` set `{$MODE FPC}`, which does NOT provide `Result`** (that
+  is on by default only in OBJFPC/DELPHI). Added `{$MODESWITCH RESULT+}`.
+
+## Trap worth knowing
+
+**FPC defines `WINDOWS` for the win32 target; DNR's `{$IFDEF Windows}` means
+16-bit Windows 3.x (Turbo Pascal for Windows).** Different things, 16 sites.
+Left alone it silently selects TPW code paths and demands `WinProcs`.
+Compile with **`-uWINDOWS`** to undefine it. This is in every command below.
+
+## Current blocker, unchanged in shape
+
+`OBJECTS.PAS`, 3 errors:
+
+1. `FillChar(Image(Self).Data, ...)` - hard cast of an object to a local
+   record type; FPC rejects it.
+2. `TRect.Contains` and one neighbour - still 16-bit assembler.
+
+Then `STRINGS.PAS:174` (`les reg16,reg32`) is next in line for win32; it is
+legal on i8086, which is why the DOS target remains the cheaper one.
+
+## Reproduce
+
+    ppcross8086.exe -Mtp -Wmlarge -XX -uWINDOWS ^
+      -Fi<src> -Fu<src> -Fu<units>\8086-large\rtl -Fu<units>\8086-large\rtl-extra ^
+      -FE<out> -FU<out> <file.pas>
+
+Note `-Fu` must NOT include the `fv` directory: DNR ships its own forked
+Turbo Vision and Free Vision's units would shadow it. Only two DNR units
+collide with the RTL proper - `STRINGS` and `MESSAGES` - and `STRINGS` is
+why `dos` reports "Can't find unit" (it shadows the RTL's `strings`, so
+`dos` is rebuilt against the wrong unit). Renaming those two is the next
+cheap win, worth ~16 units.

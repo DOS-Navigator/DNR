@@ -32,13 +32,13 @@ type
 const
       RCalcLine: TStreamRec = (
        ObjType: otCalcLine;
-       VmtLink: Ofs(TypeOf(TCalcLine)^);
+       VmtLink: TypeOf(TCalcLine);
        Load: @TCalcLine.Load;
        Store: @TCalcLine.Store);
 
       RIndicator: TStreamRec = (
        ObjType: otIndicator;
-       VmtLink: Ofs(TypeOf(TIndicator)^);
+       VmtLink: TypeOf(TIndicator);
        Load: @TIndicator.Load;
        Store: @TIndicator.Store);
 

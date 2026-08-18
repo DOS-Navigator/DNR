@@ -184,49 +184,49 @@ const CreatedDir: String = '';
 
       RTreeView: TStreamRec = (
        ObjType: otTreeView;
-       VmtLink: Ofs(TypeOf(TTreeView)^);
+       VmtLink: TypeOf(TTreeView);
        Load: @TTreeView.Load;
        Store: @TTreeView.Store);
 
       RTreeReader: TStreamRec = (
        ObjType: otTreeReader;
-       VmtLink: Ofs(TypeOf(TTreeReader)^);
+       VmtLink: TypeOf(TTreeReader);
        Load: @TTreeReader.Load;
        Store: @TTreeReader.Store);
 
       RTreeWindow: TStreamRec = (
        ObjType: otTreeWindow;
-       VmtLink: Ofs(TypeOf(TTreeWindow)^);
+       VmtLink: TypeOf(TTreeWindow);
        Load: @TTreeWindow.Load;
        Store: @TTreeWindow.Store);
 
       RTreePanel: TStreamRec = (
        ObjType: otTreePanel;
-       VmtLink: Ofs(TypeOf(TTreePanel)^);
+       VmtLink: TypeOf(TTreePanel);
        Load: @TTreePanel.Load;
        Store: @TTreePanel.Store);
 
       RTreeDialog: TStreamRec = (
        ObjType: otTreeDialog;
-       VmtLink: Ofs(TypeOf(TTreeDialog)^);
+       VmtLink: TypeOf(TTreeDialog);
        Load: @TTreeDialog.Load;
        Store: @TTreeDialog.Store);
 
       RTreeInfoView: TStreamRec = (
        ObjType: otTreeInfoView;
-       VmtLink: Ofs(TypeOf(TTreeInfoView)^);
+       VmtLink: TypeOf(TTreeInfoView);
        Load: @TTreeInfoView.Load;
        Store: @TTreeInfoView.Store);
 
       RHTreeView: TStreamRec = (
        ObjType: otHTreeView;
-       VmtLink: Ofs(TypeOf(THTreeView)^);
+       VmtLink: TypeOf(THTreeView);
        Load: @THTreeView.Load;
        Store: @THTreeView.Store);
 
       RDirCollection: TStreamRec = (
        ObjType: otDirCollection;
-       VmtLink: Ofs(TypeOf(TDirCollection)^);
+       VmtLink: TypeOf(TDirCollection);
        Load: @TDirCollection.Load;
        Store: @TDirCollection.Store);
 

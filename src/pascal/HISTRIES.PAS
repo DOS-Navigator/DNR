@@ -133,13 +133,13 @@ const
 
       REditHistoryCol: TStreamRec = (
       ObjType: otEditHistoryCol;
-      VmtLink: Ofs( TypeOf( TEditHistoryCol)^ );
+      VmtLink: TypeOf(TEditHistoryCol);
       Load: @TEditHistoryCol.Load;
       Store: @TEditHistoryCol.Store );
 
       RViewHistoryCol: TStreamRec = (
       ObjType: otViewHistoryCol;
-      VmtLink: Ofs( TypeOf( TViewHistoryCol)^ );
+      VmtLink: TypeOf(TViewHistoryCol);
       Load: @TViewHistoryCol.Load;
       Store: @TViewHistoryCol.Store );
 

@@ -155,7 +155,7 @@ type
 const
   RHelpTopic: TStreamRec = (
      ObjType: otHelpTopic;
-     VmtLink: Ofs(TypeOf(THelpTopic)^);
+     VmtLink: TypeOf(THelpTopic);
      Load:    @THelpTopic.Load;
      Store:   @THelpTopic.Store
   );
@@ -163,7 +163,7 @@ const
 const
   RHelpIndex: TStreamRec = (
      ObjType: otHelpIndex;
-     VmtLink: Ofs(TypeOf(THelpIndex)^);
+     VmtLink: TypeOf(THelpIndex);
      Load:    @THelpIndex.Load;
      Store:   @THelpIndex.Store
   );

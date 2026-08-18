@@ -93,13 +93,13 @@ procedure DeallocateScrollbk ;
 const
       RScrollBackWindow: TStreamRec = (
        ObjType: otScrollBackWindow;
-       VmtLink: Ofs(TypeOf(TScrollBackWindow)^);
+       VmtLink: TypeOf(TScrollBackWindow);
        Load: @TScrollBackWindow.Load;
        Store: @TScrollBackWindow.Store);
 
       RScrollBack: TStreamRec = (
        ObjType: otScrollBack;
-       VmtLink: Ofs(TypeOf(TScrollBack)^);
+       VmtLink: TypeOf(TScrollBack);
        Load: @TScrollBack.Load;
        Store: @TScrollBack.Store);
 

@@ -128,19 +128,19 @@ const Game : PGameView = nil;
 
       RGameWindow: TStreamRec = (
        ObjType: otGameWindow;
-       VmtLink: Ofs(TypeOf(TGameWindow)^);
+       VmtLink: TypeOf(TGameWindow);
        Load: @TGameWindow.Load;
        Store: @TGameWindow.Store);
 
       RGameView: TStreamRec = (
        ObjType: otGameView;
-       VmtLink: Ofs(TypeOf(TGameView)^);
+       VmtLink: TypeOf(TGameView);
        Load: @TGameView.Load;
        Store: @TGameView.Store);
 
       RGameInfo: TStreamRec = (
        ObjType: otGameInfo;
-       VmtLink: Ofs(TypeOf(TGameInfo)^);
+       VmtLink: TypeOf(TGameInfo);
        Load: @TGameInfo.Load;
        Store: @TGameInfo.Store);
 

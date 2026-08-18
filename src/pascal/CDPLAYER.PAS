@@ -231,13 +231,13 @@ TYPE
 CONST
   RCdplayer: TStreamRec = (
   ObjType: otCdplayer;
-  VmtLink: Ofs( TypeOf( TCdPlayer )^ );
+  VmtLink: TypeOf(TCdPlayer);
   Load: @TCDplayer.Load;
   Store: @TCDplayer.Store );
 
   RCDCounter: TStreamRec = (
   ObjType: otCDCounter;
-  VmtLink: Ofs( TypeOf( TCounter )^ );
+  VmtLink: TypeOf(TCounter);
   Load: @TCounter.Load;
   Store: @TCounter.Store );
 

@@ -113,37 +113,37 @@ type
 const
       RFilePanel: TStreamRec = (
        ObjType: otFilePanel;
-       VmtLink: Ofs(TypeOf(TFilePanel)^);
+       VmtLink: TypeOf(TFilePanel);
        Load: @TFilePanel.Load;
        Store: @TFilePanel.Store);
 
       RInfoView: TStreamRec = (
        ObjType: otFlPInfoView;
-       VmtLink: Ofs(TypeOf(TInfoView)^);
+       VmtLink: TypeOf(TInfoView);
        Load: @TInfoView.Load;
        Store: @TInfoView.Store);
 
       RTopView: TStreamRec = (
        ObjType: otTopView;
-       VmtLink: Ofs(TypeOf(TTopView)^);
+       VmtLink: TypeOf(TTopView);
        Load: @TTopView.Load;
        Store: @TTopView.Store);
 
       RSeparator: TStreamRec = (
        ObjType: otSeparator;
-       VmtLink: Ofs(TypeOf(TSeparator)^);
+       VmtLink: TypeOf(TSeparator);
        Load: @TSeparator.Load;
        Store: @TSeparator.Store);
 
       RSpecScroll: TStreamRec = (
        ObjType: otSpecScroll;
-       VmtLink: Ofs(TypeOf(TSpecScroll)^);
+       VmtLink: TypeOf(TSpecScroll);
        Load: @TSpecScroll.Load;
        Store: @TSpecScroll.Store);
 
       RDriveLine: TStreamRec = (
        ObjType: otDriveLine;
-       VmtLink: Ofs(TypeOf(TDriveLine)^);
+       VmtLink: TypeOf(TDriveLine);
        Load: @TDriveLine.Load;
        Store: @TDriveLine.Store);
 

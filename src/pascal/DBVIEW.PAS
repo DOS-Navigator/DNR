@@ -133,25 +133,25 @@ type
 
   RDBWindow: TStreamRec = (
   ObjType: otDBWindow;
-  VmtLink: Ofs( TypeOf( TDBWindow )^ );
+  VmtLink: TypeOf(TDBWindow);
   Load: @TDBWindow.Load;
   Store: @TDBWindow.Store );
 
   RDBViewer: TStreamRec = (
   ObjType: otDBViewer;
-  VmtLink: Ofs( TypeOf( TDBViewer )^ );
+  VmtLink: TypeOf(TDBViewer);
   Load: @TDBViewer.Load;
   Store: @TDBViewer.Store );
 
   RDBIndicator: TStreamRec = (
   ObjType: otDBIndicator;
-  VmtLink: Ofs( TypeOf( TDBIndicator )^ );
+  VmtLink: TypeOf(TDBIndicator);
   Load: @TDBIndicator.Load;
   Store: @TDBIndicator.Store );
 
   RTFieldListBox: TStreamRec = (
   ObjType: otFieldListBox;
-  VmtLink: Ofs( TypeOf( TFieldListBox )^ );
+  VmtLink: TypeOf(TFieldListBox);
   Load: @TFieldListBox.Load;
   Store: @TFieldListBox.Store );
 

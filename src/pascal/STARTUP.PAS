@@ -281,7 +281,7 @@ CONST
 
   RTextCollection: TStreamRec = (
     ObjType: otTextCollection;
-    VmtLink: Ofs(TypeOf(TTextCollection)^);
+    VmtLink: TypeOf(TTextCollection);
     Load:    @TTextCollection.Load;
     Store:   @TTextCollection.Store);
 

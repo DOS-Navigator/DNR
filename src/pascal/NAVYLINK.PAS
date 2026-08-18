@@ -108,13 +108,13 @@ type
 const
       RLinker: TStreamRec = (
        ObjType: otLinker;
-       VmtLink: Ofs(TypeOf(TLinker)^);
+       VmtLink: TypeOf(TLinker);
        Load: @TLinker.Load;
        Store: @TLinker.Store);
 
       RLinkDrive: TStreamRec = (
        ObjType: otLinkDrive;
-       VmtLink: Ofs(TypeOf(TLinkDrive)^);
+       VmtLink: TypeOf(TLinkDrive);
        Load: @TLinkDrive.Load;
        Store: @TLinkDrive.Store);
 

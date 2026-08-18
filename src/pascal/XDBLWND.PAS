@@ -61,7 +61,7 @@ type
 const
      RDoubleWindow: TStreamRec = (
        ObjType: otDoubleWindow;
-       VmtLink: Ofs(TypeOf(TXDoubleWindow)^);
+       VmtLink: TypeOf(TXDoubleWindow);
        Load: @TXDoubleWindow.Load;
        Store: @TXDoubleWindow.Store);
 

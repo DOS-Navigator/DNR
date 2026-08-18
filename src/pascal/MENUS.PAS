@@ -242,7 +242,7 @@ function NewStatusKey(const AText: String; AKeyCode: Word; ACommand: Word;
 const
   RMenuBar: TStreamRec = (
      ObjType: otMenuBar;
-     VmtLink: Ofs(TypeOf(TMenuBar)^);
+     VmtLink: TypeOf(TMenuBar);
      Load:    @TMenuBar.Load;
      Store:   @TMenuBar.Store
   );
@@ -250,7 +250,7 @@ const
 const
   RMenuBox: TStreamRec = (
      ObjType: otMenuBox;
-     VmtLink: Ofs(TypeOf(TMenuBox)^);
+     VmtLink: TypeOf(TMenuBox);
      Load:    @TMenuBox.Load;
      Store:   @TMenuBox.Store
   );
@@ -258,7 +258,7 @@ const
 const
   RStatusLine: TStreamRec = (
      ObjType: otStatusLine;
-     VmtLink: Ofs(TypeOf(TStatusLine)^);
+     VmtLink: TypeOf(TStatusLine);
      Load:    @TStatusLine.Load;
      Store:   @TStatusLine.Store
   );
@@ -266,7 +266,7 @@ const
 const
   RMenuPopup: TStreamRec = (
      ObjType: otMenuPopup;
-     VmtLink: Ofs(TypeOf(TMenuPopup)^);
+     VmtLink: TypeOf(TMenuPopup);
      Load:    @TMenuPopup.Load;
      Store:   @TMenuPopup.Store
   );

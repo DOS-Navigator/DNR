@@ -119,7 +119,7 @@ const
 
   RDrive: TStreamRec = (
     ObjType: otDrive;
-    VmtLink: Ofs(TypeOf(TDrive)^);
+    VmtLink: TypeOf(TDrive);
     Load: @TDrive.Load;
     Store: @TDrive.Store);
 

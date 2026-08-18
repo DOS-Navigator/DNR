@@ -122,19 +122,19 @@ type
 const
       RFileInfo: TStreamRec = (
        ObjType: otFileInfo;
-       VmtLink: Ofs(TypeOf(TFileInfo)^);
+       VmtLink: TypeOf(TFileInfo);
        Load: @TFileInfo.Load;
        Store: @TFileInfo.Store);
 
       RArcDrive: TStreamRec = (
        ObjType: otArcDrive;
-       VmtLink: Ofs(TypeOf(TArcDrive)^);
+       VmtLink: TypeOf(TArcDrive);
        Load: @TArcDrive.Load;
        Store: @TArcDrive.Store);
 
       RUserSaver: TStreamRec = (
        ObjType: otUserSaver;
-       VmtLink: Ofs(TypeOf(TUserSaver)^);
+       VmtLink: TypeOf(TUserSaver);
        Load: @TUserSaver.Load;
        Store: @TUserSaver.Store);
 

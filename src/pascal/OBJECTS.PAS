@@ -133,10 +133,10 @@ type
   PStreamRec = ^TStreamRec;
   TStreamRec = record
     ObjType: Word;
-    VmtLink: Word;
+    VmtLink: Pointer;
     Load: Pointer;
     Store: Pointer;
-    Next: Word;
+    Next: PStreamRec;
   end;
 
 { TStream }
@@ -489,21 +489,21 @@ const
 const
   RCollection: TStreamRec = (
     ObjType: otCollection;
-    VmtLink: Ofs(TypeOf(TCollection)^);
+    VmtLink: TypeOf(TCollection);
     Load: @TCollection.Load;
     Store: @TCollection.Store);
 
 const
   RStringCollection: TStreamRec = (
     ObjType: otStringCollection;
-    VmtLink: Ofs(TypeOf(TStringCollection)^);
+    VmtLink: TypeOf(TStringCollection);
     Load: @TStringCollection.Load;
     Store: @TStringCollection.Store);
 
 const
   RStrCollection: TStreamRec = (
     ObjType: otStrCollection;
-    VmtLink: Ofs(TypeOf(TStrCollection)^);
+    VmtLink: TypeOf(TStrCollection);
     Load:    @TStrCollection.Load;
     Store:   @TStrCollection.Store);
 
@@ -512,14 +512,14 @@ const
 const
   RStringList: TStreamRec = (
     ObjType: otStringList;
-    VmtLink: Ofs(TypeOf(TStringList)^);
+    VmtLink: TypeOf(TStringList);
     Load: @TStringList.Load;
     Store: nil);
 
 const
   RStrListMaker: TStreamRec = (
     ObjType: otStrListMaker;
-    VmtLink: Ofs(TypeOf(TStrListMaker)^);
+    VmtLink: TypeOf(TStrListMaker);
     Load: nil;
     Store: @TStrListMaker.Store);
 
@@ -527,10 +527,16 @@ const
 
 implementation
 
+{$IFDEF Windows}
+uses WinProcs, Strings, OMemory;
+{$ELSE}
+uses Memory, Strings;
+{$ENDIF}
+
 {$IFDEF FPC}
-{ Portable replacements for the inline() machine code declared above.
-  Semantically identical: the original opcodes are a signed 16x16->32
-  multiply and a signed 32/16 divide. }
+{ Portable replacements for the inline() machine code declared in the
+  interface. Semantically identical: the original opcodes are a signed
+  16x16->32 multiply and a signed 32/16 divide. }
 
 function LongMul(X, Y: Integer): Longint;
 begin
@@ -541,12 +547,6 @@ function LongDiv(X: Longint; Y: Integer): Integer;
 begin
   LongDiv := X div Y;
 end;
-{$ENDIF}
-
-{$IFDEF Windows}
-uses WinProcs, Strings, OMemory;
-{$ELSE}
-uses Memory, Strings;
 {$ENDIF}
 
 {$IFDEF Windows}
@@ -595,67 +595,55 @@ end;
 { TStream type registration routines }
 
 const
-  StreamTypes: Word = 0;
+  StreamTypes: PStreamRec = nil;
 
 procedure RegisterError;
 begin
   RunError(212);
 end;
 
-PROCEDURE RegisterType; assembler;
-asm
-        MOV     AX,DS
-        CMP     AX,S.Word[2]
-        JNE     @@1
-        MOV     SI,S.Word[0]
-        MOV     AX,[SI].TStreamRec.ObjType
-        OR      AX,AX
-        JE      @@1
-        MOV     DI,StreamTypes
-        JMP     @@3
-@@1:    JMP     RegisterError
-@@2:    CMP     AX,[DI].TStreamRec.ObjType
-        JE      @@4
-        MOV     DI,[DI].TStreamRec.Next
-@@3:    OR      DI,DI
-        JNE     @@2
-        MOV     DI,StreamTypes
-        MOV     [SI].TStreamRec.Next,DI
-        MOV     StreamTypes,SI
-@@4:
+procedure RegisterType(var S: TStreamRec);
+{ Was 16-bit assembler. Rewritten in Pascal after FPC's Free Vision
+  (packages/rtl-extra/src/inc/objects.pp). The original also verified that
+  S lived in the data segment (CMP AX,S.Word[2]); that check is meaningless
+  in a flat address space and is dropped. }
+var
+  P: PStreamRec;
+begin
+  P := StreamTypes;
+  while (P <> nil) and (P^.ObjType <> S.ObjType) do
+    P := P^.Next;
+  if (P = nil) and (S.ObjType <> 0) then
+  begin
+    S.Next := StreamTypes;
+    StreamTypes := @S;
+  end
+  else
+    RegisterError;
 end;
 
-PROCEDURE ReRegisterType; assembler;
-asm
-        MOV     AX,DS
-        CMP     AX,S.Word[2]
-        JNE     @Error
-        MOV     SI,S.Word[0]
-        MOV     DI,StreamTypes
-        MOV     [SI].TStreamRec.Next,DI
-        MOV     StreamTypes,SI
-        MOV     AX,[SI].TStreamRec.ObjType
-{ This moment:
-  SI: StreamTypes
-  DI: StreamTypes^.Next
-  AX: Current ObjType
-  GOAL: To find the same ObjType and
-        to remove it from list.
-}
-@Loop:
-        OR      DI,DI
-        JE      @End
-        CMP     AX,[DI].TStreamRec.ObjType
-        JE      @Found
-        MOV     SI,DI
-        MOV     DI,[DI].TStreamRec.Next
-        JMP     @Loop
-@Error: JMP     RegisterError
-@Found: MOV     AX,[DI].TStreamRec.Next
-        MOV     [SI].TStreamRec.Next,AX
-        XOR     AX,AX
-        MOV     [DI].TStreamRec.Next,AX
-@End:
+procedure ReRegisterType(var S: TStreamRec);
+{ Was 16-bit assembler. Semantics preserved from the original: push S onto
+  the head of the chain, then walk forward and unlink any later entry that
+  carries the same ObjType. }
+var
+  P, Prev: PStreamRec;
+begin
+  S.Next := StreamTypes;
+  StreamTypes := @S;
+  Prev := @S;
+  P := S.Next;
+  while P <> nil do
+  begin
+    if P^.ObjType = S.ObjType then
+    begin
+      Prev^.Next := P^.Next;
+      P^.Next := nil;
+      Exit;
+    end;
+    Prev := P;
+    P := P^.Next;
+  end;
 end;
 
 {
@@ -752,44 +740,54 @@ procedure TStream.Flush;
 begin
 end;
 
-function TStream.Get: PObject; assembler;
-asm
-        PUSH    AX
-        MOV     AX,SP
-        PUSH    SS
-        PUSH    AX
-        MOV     AX,2
-        PUSH    AX
-        LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        MOV     DI,ES:[DI]
-        CALL    DWORD PTR [DI].TStream_Read
-        POP     AX
-        OR      AX,AX
-        JE      @@3
-        MOV     BX,StreamTypes
-        JMP     @@2
-@@1:    CMP     AX,[BX].TStreamRec.ObjType
-        JE      @@4
-        MOV     BX,[BX].TStreamRec.Next
-@@2:    OR      BX,BX
-        JNE     @@1
-        LES     DI,Self
-        MOV     DX,stGetError
-        CALL    DoStreamError
-@@3:    XOR     AX,AX
-        MOV     DX,AX
-        JMP     @@5
-@@4:    LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        PUSH    [BX].TStreamRec.VmtLink
-        XOR     AX,AX
-        PUSH    AX
-        PUSH    AX
-        CALL    [BX].TStreamRec.Load
-@@5:
+{ Call helpers, copied from FPC's own Free Vision implementation
+  (packages/rtl-extra/src/inc/objects.pp). They wrap the object-model ABI
+  for invoking a constructor or a method through a raw code pointer, which
+  is the one part of this port that must not be hand-rolled.
+
+  NOTE: the argument order in the calls below looks transposed against the
+  parameter names in the type declarations. That is exactly how FPC writes
+  it; the names are only labels and the order is the calling convention.
+  Do not "fix" it. }
+type
+  TPointerConstructor = function(VMT: Pointer; Obj: Pointer; Param1: Pointer): Pointer;
+  TPointerMethod      = function(Obj: Pointer; Param1: Pointer): Pointer;
+
+function CallPointerConstructor(Ctor: Pointer; Obj: Pointer; VMT: Pointer;
+                                Param1: Pointer): Pointer;
+begin
+  CallPointerConstructor := TPointerConstructor(Ctor)(Obj, VMT, Param1);
+end;
+
+function CallPointerMethod(Method: Pointer; Obj: Pointer; Param1: Pointer): Pointer;
+begin
+  CallPointerMethod := TPointerMethod(Method)(Obj, Param1);
+end;
+
+function TStream.Get: PObject;
+{ Was 16-bit assembler. The constructor call goes through FPC's
+  CallPointerConstructor intrinsic, which is how Free Vision does it; the
+  object-model ABI must not be hand-rolled. }
+var
+  ObjType: Word;
+  P: PStreamRec;
+begin
+  Read(ObjType, SizeOf(ObjType));
+  if ObjType = 0 then
+  begin
+    Get := nil;
+    Exit;
+  end;
+  P := StreamTypes;
+  while (P <> nil) and (P^.ObjType <> ObjType) do
+    P := P^.Next;
+  if P = nil then
+  begin
+    Error(stGetError, ObjType);
+    Get := nil;
+  end
+  else
+    Get := PObject(CallPointerConstructor(P^.Load, nil, P^.VmtLink, @Self));
 end;
 
 function TStream.GetPos: Longint;
@@ -802,47 +800,37 @@ begin
   Abstract;
 end;
 
-procedure TStream.Put(P: PObject); assembler;
-asm
-        LES     DI,P
-        MOV     CX,ES
-        OR      CX,DI
-        JE      @@4
-        MOV     AX,ES:[DI]
-        MOV     BX,StreamTypes
-        JMP     @@2
-@@1:    CMP     AX,[BX].TStreamRec.VmtLink
-        JE      @@3
-        MOV     BX,[BX].TStreamRec.Next
-@@2:    OR      BX,BX
-        JNE     @@1
-        LES     DI,Self
-        MOV     DX,stPutError
-        CALL    DoStreamError
-        JMP     @@5
-@@3:    MOV     CX,[BX].TStreamRec.ObjType
-@@4:    PUSH    BX
-        PUSH    CX
-        MOV     AX,SP
-        PUSH    SS
-        PUSH    AX
-        MOV     AX,2
-        PUSH    AX
-        LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        MOV     DI,ES:[DI]
-        CALL    DWORD PTR [DI].TStream_Write
-        POP     CX
-        POP     BX
-        JCXZ    @@5
-        LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        PUSH    P.Word[2]
-        PUSH    P.Word[0]
-        CALL    [BX].TStreamRec.Store
-@@5:
+procedure TStream.Put(P: PObject);
+{ Was 16-bit assembler. Identifies the object by the VMT pointer stored in
+  its first field, then dispatches Store via CallPointerMethod. }
+var
+  ObjType: Word;
+  Link: Pointer;
+  Q: PStreamRec;
+  VmtPtr: ^Pointer;
+begin
+  Q := nil;
+  VmtPtr := Pointer(P);
+  if VmtPtr <> nil then
+    Link := VmtPtr^
+  else
+    Link := nil;
+  ObjType := 0;
+  if (P <> nil) and (Link <> nil) then
+  begin
+    Q := StreamTypes;
+    while (Q <> nil) and (Q^.VmtLink <> Link) do
+      Q := Q^.Next;
+    if Q = nil then
+    begin
+      Error(stPutError, 0);
+      Exit;
+    end;
+    ObjType := Q^.ObjType;
+  end;
+  Write(ObjType, SizeOf(ObjType));
+  if ObjType <> 0 then
+    CallPointerMethod(Q^.Store, P, @Self);
 end;
 
 procedure TStream.Read(var Buf; Count: Word);

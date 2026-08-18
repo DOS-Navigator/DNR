@@ -78,7 +78,7 @@ type
 const
     RCellCollection: TStreamRec = (
        ObjType: otCellCollection;
-       VmtLink: Ofs(TypeOf(TCellCollection)^);
+       VmtLink: TypeOf(TCellCollection);
        Load:    @TCellCollection.Load;
        Store:   @TCellCollection.Store
       );

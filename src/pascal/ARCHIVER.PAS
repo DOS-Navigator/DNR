@@ -308,109 +308,109 @@ const
 
       RARJArchiver: TStreamRec = (
        ObjType: otARJArchiver;
-       VmtLink: Ofs(TypeOf(TARJArchive)^);
+       VmtLink: TypeOf(TARJArchive);
        Load: @TARJArchive.Load;
        Store: @TARJArchive.Store);
 
       RZIPArchiver: TStreamRec = (
        ObjType: otZIPArchiver;
-       VmtLink: Ofs(TypeOf(TZIPArchive)^);
+       VmtLink: TypeOf(TZIPArchive);
        Load: @TZIPArchive.Load;
        Store: @TZIPArchive.Store);
 
       RARCArchiver: TStreamRec = (
        ObjType: otARCArchiver;
-       VmtLink: Ofs(TypeOf(TARCArchive)^);
+       VmtLink: TypeOf(TARCArchive);
        Load: @TARCArchive.Load;
        Store: @TARCArchive.Store);
 
       RHYPArchiver: TStreamRec = (
        ObjType: otHYPArchiver;
-       VmtLink: Ofs(TypeOf(THYPArchive)^);
+       VmtLink: TypeOf(THYPArchive);
        Load: @THYPArchive.Load;
        Store: @THYPArchive.Store);
 
       RRARArchiver: TStreamRec = (
        ObjType: otRARArchiver;
-       VmtLink: Ofs(TypeOf(TRARArchive)^);
+       VmtLink: TypeOf(TRARArchive);
        Load: @TRARArchive.Load;
        Store: @TRARArchive.Store);
 
       RHAPArchiver: TStreamRec = (
        ObjType: otHAPArchiver;
-       VmtLink: Ofs(TypeOf(THAPArchive)^);
+       VmtLink: TypeOf(THAPArchive);
        Load: @THAPArchive.Load;
        Store: @THAPArchive.Store);
 
       RHAArchiver: TStreamRec = (
        ObjType: otHAArchiver;
-       VmtLink: Ofs(TypeOf(THAArchive)^);
+       VmtLink: TypeOf(THAArchive);
        Load: @THAArchive.Load;
        Store: @THAArchive.Store);
 
       RSQZArchiver: TStreamRec = (
        ObjType: otSQZArchiver;
-       VmtLink: Ofs(TypeOf(TSQZArchive)^);
+       VmtLink: TypeOf(TSQZArchive);
        Load: @TSQZArchive.Load;
        Store: @TSQZArchive.Store);
 
       RBSAArchiver: TStreamRec = (
        ObjType: otBSAArchiver;
-       VmtLink: Ofs(TypeOf(TBSAArchive)^);
+       VmtLink: TypeOf(TBSAArchive);
        Load: @TBSAArchive.Load;
        Store: @TBSAArchive.Store);
 
       RBS2Archiver: TStreamRec = (
        ObjType: otBS2Archiver;
-       VmtLink: Ofs(TypeOf(TBS2Archive)^);
+       VmtLink: TypeOf(TBS2Archive);
        Load: @TBS2Archive.Load;
        Store: @TBS2Archive.Store);
 
       RCHZArchiver: TStreamRec = (
        ObjType: otCHZArchiver;
-       VmtLink: Ofs(TypeOf(TCHZArchive)^);
+       VmtLink: TypeOf(TCHZArchive);
        Load: @TCHZArchive.Load;
        Store: @TCHZArchive.Store);
 
       RLHAArchiver: TStreamRec = (
        ObjType: otLHAArchiver;
-       VmtLink: Ofs(TypeOf(TLHAArchive)^);
+       VmtLink: TypeOf(TLHAArchive);
        Load: @TLHAArchive.Load;
        Store: @TLHAArchive.Store);
 
       RZOOArchiver: TStreamRec = (
        ObjType: otZOOArchiver;
-       VmtLink: Ofs(TypeOf(TZOOArchive)^);
+       VmtLink: TypeOf(TZOOArchive);
        Load: @TZOOArchive.Load;
        Store: @TZOOArchive.Store);
 
       RUC2Archiver: TStreamRec = (
        ObjType: otUC2Archiver;
-       VmtLink: Ofs(TypeOf(TUC2Archive)^);
+       VmtLink: TypeOf(TUC2Archive);
        Load: @TUC2Archive.Load;
        Store: @TUC2Archive.Store);
 
       RLIMArchiver: TStreamRec = (
        ObjType: otLIMArchiver;
-       VmtLink: Ofs(TypeOf(TLIMArchive)^);
+       VmtLink: TypeOf(TLIMArchive);
        Load: @TLIMArchive.Load;
        Store: @TLIMArchive.Store);
 
       RHPKArchiver: TStreamRec = (
        ObjType: otHPKArchiver;
-       VmtLink: Ofs(TypeOf(THPKArchive)^);
+       VmtLink: TypeOf(THPKArchive);
        Load: @THPKArchive.Load;
        Store: @THPKArchive.Store);
 
       RTARArchiver: TStreamRec = (
        ObjType: otTARArchiver;
-       VmtLink: Ofs(TypeOf(TTARArchive)^);
+       VmtLink: TypeOf(TTARArchive);
        Load: @TTARArchive.Load;
        Store: @TTARArchive.Store);
 
       RArchiveCollection: TStreamRec = (
        ObjType: otArchiveCollection;
-       VmtLink: Ofs(TypeOf(TArchiveCollection)^);
+       VmtLink: TypeOf(TArchiveCollection);
        Load: @TArchiveCollection.Load;
        Store: @TArchiveCollection.Store);
 

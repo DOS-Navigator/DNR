@@ -80,19 +80,19 @@ const
 
   RTable: TStreamRec = (
      ObjType: otTable;
-     VmtLink: Ofs(TypeOf(TTable)^);
+     VmtLink: TypeOf(TTable);
      Load:    @TTable.Load;
      Store:   @TTable.Store
   );
   RReport: TStreamRec = (
      ObjType: otReport;
-     VmtLink: Ofs(TypeOf(TReport)^);
+     VmtLink: TypeOf(TReport);
      Load:    @TReport.Load;
      Store:   @TReport.Store
   );
   RASCIIChart: TStreamRec = (
      ObjType: otASCIIChart;
-     VmtLink: Ofs(TypeOf(TASCIIChart)^);
+     VmtLink: TypeOf(TASCIIChart);
      Load:    @TASCIIChart.Load;
      Store:   @TASCIIChart.Store
   );

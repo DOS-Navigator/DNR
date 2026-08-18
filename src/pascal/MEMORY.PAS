@@ -697,5 +697,8 @@ asm
 end;
 
 {$ENDIF}
+{$ENDIF} { closes {$IFDEF MODERN} opened near the top of the implementation.
+           It was missing: the file had 4 conditional opens and 3 closes, so
+           the compiler reported "$ENDIF expected for $ELSE MODERN". }
 
 end.

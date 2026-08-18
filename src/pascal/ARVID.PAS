@@ -147,7 +147,7 @@ type
 const
   RArvidDrive: TStreamRec = (
     ObjType: otArvidDrive;
-    VmtLink: Ofs(TypeOf(TArvidDrive)^);
+    VmtLink: TypeOf(TArvidDrive);
     Load: @TArvidDrive.Load;
     Store: @TArvidDrive.Store);
 

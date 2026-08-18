@@ -110,7 +110,7 @@ const
 
       RFilesCollection: TStreamRec = (
        ObjType: otFilesCollection;
-       VmtLink: Ofs(TypeOf(TFilesCollection)^);
+       VmtLink: TypeOf(TFilesCollection);
        Load: @TFilesCollection.Load;
        Store: @TFilesCollection.Store);
 

@@ -537,7 +537,7 @@ const
 const
   RView: TStreamRec = (
      ObjType: otView;
-     VmtLink: Ofs(TypeOf(TView)^);
+     VmtLink: TypeOf(TView);
      Load:    @TView.Load;
      Store:   @TView.Store
   );
@@ -545,7 +545,7 @@ const
 const
   RFrame: TStreamRec = (
      ObjType: otFrame;
-     VmtLink: Ofs(TypeOf(TFrame)^);
+     VmtLink: TypeOf(TFrame);
      Load:    @TFrame.Load;
      Store:   @TFrame.Store
   );
@@ -553,7 +553,7 @@ const
 const
   RScrollBar: TStreamRec = (
      ObjType: otScrollBar;
-     VmtLink: Ofs(TypeOf(TScrollBar)^);
+     VmtLink: TypeOf(TScrollBar);
      Load:    @TScrollBar.Load;
      Store:   @TScrollBar.Store
   );
@@ -561,7 +561,7 @@ const
 const
   RGroup: TStreamRec = (
      ObjType: otGroup;
-     VmtLink: Ofs(TypeOf(TGroup)^);
+     VmtLink: TypeOf(TGroup);
      Load:    @TGroup.Load;
      Store:   @TGroup.Store
   );
@@ -569,7 +569,7 @@ const
 const
   RWindow: TStreamRec = (
      ObjType: otWindow;
-     VmtLink: Ofs(TypeOf(TWindow)^);
+     VmtLink: TypeOf(TWindow);
      Load:    @TWindow.Load;
      Store:   @TWindow.Store
   );

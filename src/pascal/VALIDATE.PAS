@@ -183,7 +183,7 @@ type
 const
   RPXPictureValidator: TStreamRec = (
     ObjType: 80;
-    VmtLink: Ofs(TypeOf(TPXPictureValidator)^);
+    VmtLink: TypeOf(TPXPictureValidator);
     Load: @TPXPictureValidator.Load;
     Store: @TPXPictureValidator.Store
   );
@@ -192,7 +192,7 @@ const
 const
   RFilterValidator: TStreamRec = (
     ObjType: otFilterValidator;
-    VmtLink: Ofs(TypeOf(TFilterValidator)^);
+    VmtLink: TypeOf(TFilterValidator);
     Load: @TFilterValidator.Load;
     Store: @TFilterValidator.Store
   );
@@ -200,7 +200,7 @@ const
 const
   RRangeValidator: TStreamRec = (
     ObjType: otRangeValidator;
-    VmtLink: Ofs(TypeOf(TRangeValidator)^);
+    VmtLink: TypeOf(TRangeValidator);
     Load: @TRangeValidator.Load;
     Store: @TRangeValidator.Store
   );
@@ -210,7 +210,7 @@ const
 const
   RStringLookupValidator: TStreamRec = (
     ObjType: 83;
-    VmtLink: Ofs(TypeOf(TStringLookupValidator)^);
+    VmtLink: TypeOf(TStringLookupValidator);
     Load: @TStringLookupValidator.Load;
     Store: @TStringLookupValidator.Store
   );

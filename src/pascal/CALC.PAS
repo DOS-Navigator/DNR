@@ -139,25 +139,25 @@ function GetFileName(var FileName: String; Mask, Title, ALabel: String; Buttons:
 const
       RCalcWindow: TStreamRec = (
        ObjType: otCalcWindow;
-       VmtLink: Ofs(TypeOf(TCalcWindow)^);
+       VmtLink: TypeOf(TCalcWindow);
        Load: @TCalcWindow.Load;
        Store: @TCalcWindow.Store);
 
       RCalcView: TStreamRec = (
        ObjType: otCalcView;
-       VmtLink: Ofs(TypeOf(TCalcView)^);
+       VmtLink: TypeOf(TCalcView);
        Load: @TCalcView.Load;
        Store: @TCalcView.Store);
 
       RCalcInfo: TStreamRec = (
        ObjType: otCalcInfo;
-       VmtLink: Ofs(TypeOf(TCalcInfo)^);
+       VmtLink: TypeOf(TCalcInfo);
        Load: @TCalcInfo.Load;
        Store: @TCalcInfo.Store);
 
       RInfoView: TStreamRec = (
        ObjType: otInfoView;
-       VmtLink: Ofs(TypeOf(Calc.TInfoView)^);
+       VmtLink: TypeOf(Calc.TInfoView);
        Load: @Calc.TInfoView.Load;
        Store: @Calc.TInfoView.Store);
 

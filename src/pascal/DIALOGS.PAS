@@ -496,7 +496,7 @@ function NewSItem(const Str: String; ANext: PSItem): PSItem;
 const
   RDialog: TStreamRec = (
      ObjType: otDialog;
-     VmtLink: Ofs(TypeOf(TDialog)^);
+     VmtLink: TypeOf(TDialog);
      Load:    @TDialog.Load;
      Store:   @TDialog.Store
   );
@@ -504,7 +504,7 @@ const
 const
   RInputLine: TStreamRec = (
      ObjType: otInputLine;
-     VmtLink: Ofs(TypeOf(TInputLine)^);
+     VmtLink: TypeOf(TInputLine);
      Load:    @TInputLine.Load;
      Store:   @TInputLine.Store
   );
@@ -512,7 +512,7 @@ const
 const
   RButton: TStreamRec = (
      ObjType: otButton;
-     VmtLink: Ofs(TypeOf(TButton)^);
+     VmtLink: TypeOf(TButton);
      Load:    @TButton.Load;
      Store:   @TButton.Store
   );
@@ -520,7 +520,7 @@ const
 const
   RCluster: TStreamRec = (
      ObjType: otCluster;
-     VmtLink: Ofs(TypeOf(TCluster)^);
+     VmtLink: TypeOf(TCluster);
      Load:    @TCluster.Load;
      Store:   @TCluster.Store
   );
@@ -528,7 +528,7 @@ const
 const
   RRadioButtons: TStreamRec = (
      ObjType: otRadioButtons;
-     VmtLink: Ofs(TypeOf(TRadioButtons)^);
+     VmtLink: TypeOf(TRadioButtons);
      Load:    @TRadioButtons.Load;
      Store:   @TRadioButtons.Store
   );
@@ -536,7 +536,7 @@ const
 const
   RCheckBoxes: TStreamRec = (
      ObjType: otCheckBoxes;
-     VmtLink: Ofs(TypeOf(TCheckBoxes)^);
+     VmtLink: TypeOf(TCheckBoxes);
      Load:    @TCheckBoxes.Load;
      Store:   @TCheckBoxes.Store
   );
@@ -544,7 +544,7 @@ const
 const
   RMultiCheckBoxes: TStreamRec = (
      ObjType: otMultiCheckBoxes;
-     VmtLink: Ofs(TypeOf(TMultiCheckBoxes)^);
+     VmtLink: TypeOf(TMultiCheckBoxes);
      Load:    @TMultiCheckBoxes.Load;
      Store:   @TMultiCheckBoxes.Store
   );
@@ -552,7 +552,7 @@ const
 const
   RListBox: TStreamRec = (
      ObjType: otListBox;
-     VmtLink: Ofs(TypeOf(TListBox)^);
+     VmtLink: TypeOf(TListBox);
      Load:    @TListBox.Load;
      Store:   @TListBox.Store
   );
@@ -560,7 +560,7 @@ const
 const
   RStaticText: TStreamRec = (
      ObjType: otStaticText;
-     VmtLink: Ofs(TypeOf(TStaticText)^);
+     VmtLink: TypeOf(TStaticText);
      Load:    @TStaticText.Load;
      Store:   @TStaticText.Store
   );
@@ -568,7 +568,7 @@ const
 const
   RLabel: TStreamRec = (
      ObjType: otLabel;
-     VmtLink: Ofs(TypeOf(TLabel)^);
+     VmtLink: TypeOf(TLabel);
      Load:    @TLabel.Load;
      Store:   @TLabel.Store
   );
@@ -576,7 +576,7 @@ const
 const
   RHistory: TStreamRec = (
      ObjType: otHistory;
-     VmtLink: Ofs(TypeOf(THistory)^);
+     VmtLink: TypeOf(THistory);
      Load:    @THistory.Load;
      Store:   @THistory.Store
   );
@@ -584,7 +584,7 @@ const
 const
   RParamText: TStreamRec = (
      ObjType: otParamText;
-     VmtLink: Ofs(TypeOf(TParamText)^);
+     VmtLink: TypeOf(TParamText);
      Load:    @TParamText.Load;
      Store:   @TParamText.Store
   );

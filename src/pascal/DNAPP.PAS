@@ -295,19 +295,19 @@ const
 
   RBackground: TStreamRec = (
     ObjType: otBackground;
-    VmtLink: Ofs(TypeOf(TBackground)^);
+    VmtLink: TypeOf(TBackground);
     Load: @TBackground.Load;
     Store: @TBackground.Store);
 
   RDesktop: TStreamRec = (
     ObjType: otDesktop;
-    VmtLink: Ofs(TypeOf(TDesktop)^);
+    VmtLink: TypeOf(TDesktop);
     Load: @TDesktop.Load;
     Store: @TDesktop.Store);
 
   RStringCache: TStreamRec = (
     ObjType: otStringCache;
-    VmtLink: Ofs(TypeOf(TCacheCollection)^);
+    VmtLink: TypeOf(TCacheCollection);
     Load: @TCacheCollection.Load;
     Store: @TCacheCollection.Store);
 

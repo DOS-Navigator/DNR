@@ -77,13 +77,13 @@ const RunFrom2E : Boolean = False;
 const
       RUserWindow: TStreamRec = (
        ObjType: otUserWindow;
-       VmtLink: Ofs(TypeOf(TUserWindow)^);
+       VmtLink: TypeOf(TUserWindow);
        Load: @TUserWindow.Load;
        Store: @TUserWindow.Store);
 
       RUserView: TStreamRec = (
        ObjType: otUserView;
-       VmtLink: Ofs(TypeOf(TUserView)^);
+       VmtLink: TypeOf(TUserView);
        Load: @TUserView.Load;
        Store: @TUserView.Store);
 

@@ -88,13 +88,13 @@ const LastHour: Word = $FF;
 
       RTrashCan: TStreamRec = (
        ObjType: otTrashCan;
-       VmtLink: Ofs(TypeOf(TTrashCan)^);
+       VmtLink: TypeOf(TTrashCan);
        Load: @TTrashCan.Load;
        Store: @TTrashCan.Store);
 
       RKeyMacros: TStreamRec = (
        ObjType: otKeyMacros;
-       VmtLink: Ofs(TypeOf(TKeyMacros)^);
+       VmtLink: TypeOf(TKeyMacros);
        Load: @TKeyMacros.Load;
        Store: @TKeyMacros.Store);
 

@@ -120,19 +120,19 @@ const
 
       RTerminalWindow: TStreamRec = (
        ObjType: otTerminalWindow;
-       VmtLink: Ofs(TypeOf(TTerminalWindow)^);
+       VmtLink: TypeOf(TTerminalWindow);
        Load: @TTerminalWindow.Load;
        Store: @TTerminalWindow.Store);
 
       RTerminal: TStreamRec = (
        ObjType: otTerminal;
-       VmtLink: Ofs(TypeOf(TTerminal)^);
+       VmtLink: TypeOf(TTerminal);
        Load: @TTerminal.Load;
        Store: @TTerminal.Store);
 
       RPortInfo: TStreamRec = (
        ObjType: otPortInfo;
-       VmtLink: Ofs(TypeOf(TPortInfo)^);
+       VmtLink: TypeOf(TPortInfo);
        Load: @TPortInfo.Load;
        Store: @TPortInfo.Store);
 

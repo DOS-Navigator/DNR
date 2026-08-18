@@ -58,7 +58,7 @@ type
 const
       RXFileEditor: TStreamRec = (
        ObjType: otXFileEditor;
-       VmtLink: Ofs(TypeOf(TXFileEditor)^);
+       VmtLink: TypeOf(TXFileEditor);
        Load: @TXFileEditor.Load;
        Store: @TXFileEditor.Store);
 

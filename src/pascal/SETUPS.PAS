@@ -153,49 +153,49 @@ TYPE
 CONST
   RSysDialog: TStreamRec = (
      ObjType: otSysDialog;
-     VmtLink: Ofs(TypeOf(TSysDialog)^);
+     VmtLink: TypeOf(TSysDialog);
      Load:    @TSysDialog.Load;
      Store:   @TSysDialog.Store
   );
 
   RCurrDriveInfo: TStreamRec = (
      ObjType: otCurrDriveInfo;
-     VmtLink: Ofs(TypeOf(TCurrDriveInfo)^);
+     VmtLink: TypeOf(TCurrDriveInfo);
      Load:    @TCurrDriveInfo.Load;
      Store:   @TCurrDriveInfo.Store
   );
 
   RMouseDialog: TStreamRec = (
      ObjType: otMouseDialog;
-     VmtLink: Ofs(TypeOf(TMouseDialog)^);
+     VmtLink: TypeOf(TMouseDialog);
      Load:    @TMouseDialog.Load;
      Store:   @TMouseDialog.Store
   );
 
   RMouseBar: TStreamRec = (
      ObjType: otMouseBar;
-     VmtLink: Ofs(TypeOf(TMouseBar)^);
+     VmtLink: TypeOf(TMouseBar);
      Load:    @TMouseBar.Load;
      Store:   @TMouseBar.Store
   );
 
   RSaversDialog: TStreamRec = (
      ObjType: otSaversDialog;
-     VmtLink: Ofs(TypeOf(TSaversDialog)^);
+     VmtLink: TypeOf(TSaversDialog);
      Load:    @TSaversDialog.Load;
      Store:   @TSaversDialog.Store
   );
 
   RSaversListBox: TStreamRec = (
      ObjType: otSaversListBox;
-     VmtLink: Ofs(TypeOf(TSaversListBox)^);
+     VmtLink: TypeOf(TSaversListBox);
      Load:    @TSaversListBox.Load;
      Store:   @TSaversListBox.Store
   );
 
   RUpperTable: TStreamRec = (
      ObjType: otUpperTable;
-     VmtLink: Ofs(TypeOf(TUpperTable)^);
+     VmtLink: TypeOf(TUpperTable);
      Load:    @TUpperTable.Load;
      Store:   @TUpperTable.Store
   );

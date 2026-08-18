@@ -89,7 +89,7 @@ type
 const
       RDiskInfo: TStreamRec = (
        ObjType: otDiskInfo;
-       VmtLink: Ofs(TypeOf(TDiskInfo)^);
+       VmtLink: TypeOf(TDiskInfo);
        Load: @TDiskInfo.Load;
        Store: @TDiskInfo.Store);
 
