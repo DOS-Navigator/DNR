@@ -119,8 +119,17 @@ const   StdTracks : array [1..5] of byte = (40,80,80,80,80);
         Old8      :   Pointer = Nil;
         In13      :   boolean = False ;
          *)
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ FPC+win32: no local Timer - BiosTics (xTime, session 7) is used
+  directly at the 3 call sites below instead of redeclaring the
+  same BIOS-tick substitute a second time. Guarding `var` itself,
+  not just its content - an empty var section (nothing between it
+  and the next `type`) is not legal Pascal, learned by a syntax
+  error the first time this was attempted. }
+{$ELSE}
 var
         Timer     : Longint Absolute $40:$6C ;
+{$ENDIF}
 
  type
 {        erAction = (cmCancel,cmOk);}
@@ -387,7 +396,7 @@ var
               function    drvtype(drv:byte) : byte;
 
 {$IFnDEF FMTDBG}
-   implementation uses xTime;
+   implementation uses xTime, Memory;
 {$ENDIF}
 
      (*
@@ -428,10 +437,18 @@ procedure  INT8;interrupt;
 
       *)
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither) }
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
 
 function CopyFile(FFrom,FTo:string):boolean;
@@ -512,6 +529,15 @@ Function GetLogSector(Head,Track,Sector : Word;
     end;
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ LES-based copy of a constant disk-base-table blob into Data - see
+  module docstring for why this is a no-op rather than a byte-exact
+  port on Win32 (the destination is never used by real hardware once
+  runFormat refuses). }
+procedure   Tfmt.initDBT(var Data);
+begin
+end;
+{$ELSE}
 procedure   Tfmt.initDBT;assembler;
     asm
         push    ds
@@ -542,8 +568,14 @@ procedure   Tfmt.initDBT;assembler;
       disk10:paratyp=($df,$02,$25,$02,10,$1b,$ff,$2e,$F6,$0f,$04);
       }
    end;
+{$ENDIF}
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure   Tfmt.initBoot(var Data);
+begin
+end;
+{$ELSE}
 procedure   Tfmt.initBoot;assembler;
     asm
         push    ds
@@ -634,6 +666,7 @@ procedure   Tfmt.initBoot;assembler;
 
 @@done:
     end;
+{$ENDIF}
 
 
 
@@ -1239,9 +1272,18 @@ var  I , R : byte ;
                 DirStart   := Bsize + FSize * FatSz ; { 1st root }
             end;
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+           { with regs do / for I do swapped vs. the original order below -
+             identical semantics, but FPC reports "Illegal counter variable"
+             for with-then-for on an object field of type Registers, verified
+             by a minimal repro; i8086 compiles the original order unchanged. }
+            for I:=1 to DirSectors do
+             with regs do
+{$ELSE}
            with regs do
 
             for I:=1 to DirSectors do
+{$ENDIF}{$ENDIF}
              begin
                 GetAbsSector(pred(DirStart + I),Boot1,CH,DH,CL);
 
@@ -1325,9 +1367,13 @@ const
       with BootS,DBT do begin
         Dgap := $2A;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ BIOS drive-controller-state pokes - no Win32 equivalent }
+{$ELSE}
         mem[$0:$48B] :=  mem[$0:$48B] and $F3 or $4;    { data & step rate }
         mem[$0:$490+drvnum] :=
                   mem[$0:$490+drvnum] and $1F or $40; { disk media state }
+{$ENDIF}
       end;
      end;
 
@@ -1345,9 +1391,13 @@ const
 
       with BootS,DBT do begin
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ BIOS drive-controller-state pokes - no Win32 equivalent }
+{$ELSE}
         mem[$0:$48B] :=  mem[$0:$48B] and $F3    ;    { data & step rate }
         mem[$0:$490+drvnum] :=
                   mem[$0:$490+drvnum] and $1F    ; { disk media state }
+{$ENDIF}
       end;
      end;
 
@@ -1632,6 +1682,9 @@ end;
         if medias>0  then media := medias;  { set preselected media }
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ BIOS drive-controller-state pokes - no Win32 equivalent }
+{$ELSE}
         if set8B > 0 then
                  mem[$0:$48B] := set8B; { data & step rate }
         if set90 > 0 then
@@ -1640,6 +1693,7 @@ end;
                  mem[$0:$492+drvnum] := set92; { disk media state at start }
         if set8F > 0 then
                  mem[$0:$48F] := set8F; { data & step rate }
+{$ENDIF}
 
        if interl=0 then
          {if fgap>=$1D then interl := 1 else interl := 2;}
@@ -1969,11 +2023,21 @@ var I,J,K,NextSector,SHFT : integer;
        begin
         UserInterrupt := False;
         if not ScanEvents then Exit ;
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+          Delta := BiosTics ;
+{$ELSE}
           Delta := Timer ;
+{$ENDIF}{$ENDIF}
           UserInterrupt := FormatDialog(fdUserInterrupt) <> fdContinue;
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+          if BiosTics - Delta > 0 then
+           begin
+            Delta := BiosTics - Delta;
+{$ELSE}
           if Timer - Delta > 0 then
            begin
             Delta := Timer - Delta;
+{$ENDIF}{$ENDIF}
             inc(T_start,Delta);
            end;
        end;
@@ -2051,9 +2115,15 @@ function    tfmt.FormatMedia;
 
     Procedure CalcTime ;
        begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+          if BiosTics - t_start < 0 then t_start := BiosTics - t_elaps;
+          { prevent from timer overflow during 24h period }
+          t_elaps := BiosTics - t_start ;
+{$ELSE}
           if timer - t_start < 0 then t_start := timer - t_elaps;
           { prevent from timer overflow during 24h period }
           t_elaps := timer - t_start ;
+{$ENDIF}{$ENDIF}
           if I_formatted = 0 then exit ;
           t_estim := Round( t_elaps / I_formatted * tracks * heads );
 
@@ -2184,7 +2254,11 @@ function    tfmt.FormatMedia;
         }
 
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+       t_start  := BiosTics ;
+{$ELSE}
        t_start  := timer ;
+{$ENDIF}{$ENDIF}
        t_elaps  := 0;
        t_estim  := 0;
 
@@ -2349,6 +2423,23 @@ Function Tfmt.Cluster(Sector: Word):Word;
 
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure nullcluster( cluster:word ; var FAT );
+var
+  Buf: PByteArray;
+  Off: Word;
+  W: Word;
+begin
+  if cluster >= $2710 then Exit;
+  Off := (cluster * 3) div 2;
+  Buf := PByteArray(@FAT);
+  W := Buf^[Off] or (Buf^[Off + 1] shl 8);
+  if (cluster and 1) <> 0 then W := W and $000F
+                          else W := W and $F000;
+  Buf^[Off] := Byte(W);
+  Buf^[Off + 1] := Byte(W shr 8);
+end;
+{$ELSE}
 procedure nullcluster( cluster:word ; var FAT );assembler;
       asm
                 push    es
@@ -2373,6 +2464,7 @@ procedure nullcluster( cluster:word ; var FAT );assembler;
 @@done:
                 pop     es
       end;
+{$ENDIF}
 
 {
 procedure markcluster( cluster:word ; var FAT );
@@ -2381,6 +2473,25 @@ var P:pbArray;
 
       end;
 }
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure markcluster( cluster:word ; var FAT );
+var
+  Buf: PByteArray;
+  Off: Word;
+  W: Word;
+begin
+  if cluster >= $2710 then Exit;
+  Off := (cluster * 3) div 2;
+  Buf := PByteArray(@FAT);
+  W := Buf^[Off] or (Buf^[Off + 1] shl 8);
+  { FAT12 bad-cluster marker $FF7, shifted into bits 4..15 for an odd
+    cluster (which shares its low nibble with the preceding even one) }
+  if (cluster and 1) <> 0 then W := W or $FF70
+                          else W := W or $0FF7;
+  Buf^[Off] := Byte(W);
+  Buf^[Off + 1] := Byte(W shr 8);
+end;
+{$ELSE}
 procedure markcluster( cluster:word ; var FAT );assembler;
       asm
                 push    es
@@ -2406,7 +2517,28 @@ procedure markcluster( cluster:word ; var FAT );assembler;
 @@done:
                 pop     es
       end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function  getcluster ( cluster:word ; var FAT ):word;
+var
+  Buf: PByteArray;
+  Off: Word;
+  W: Word;
+begin
+  { Original asm falls through with AX = whatever the caller last set
+    (undefined) when cluster is out of range; returns 0 here instead -
+    a floppy never legitimately has this many clusters, so it's dead
+    either way. }
+  getcluster := 0;
+  if cluster >= $2710 then Exit;
+  Off := (cluster * 3) div 2;
+  Buf := PByteArray(@FAT);
+  W := Buf^[Off] or (Buf^[Off + 1] shl 8);
+  if (cluster and 1) <> 0 then getcluster := W shr 4
+                          else getcluster := W and $0FFF;
+end;
+{$ELSE}
 function  getcluster ( cluster:word ; var FAT ):word;assembler;
      asm
                 push    es
@@ -2434,6 +2566,7 @@ function  getcluster ( cluster:word ; var FAT ):word;assembler;
 @@done:
                 pop     es
  end;
+{$ENDIF}
 
 
 function    tfmt.MarkBadSectors(trk,head : byte):word;
@@ -2629,10 +2762,17 @@ procedure   tfmt.CalculateBootFatRoot;
 
 {_______prepare system area [boot, FAT, root  }
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+      with BootS,DBT
+        do begin
+
+                WriteBootFatRoot := false ;
+{$ELSE}
       with BootS,DBT,regs
         do begin
 
                 WriteBootFatRoot := false ;
+{$ENDIF}{$ENDIF}
 
                 EOT := tsect;
 
@@ -2646,10 +2786,19 @@ procedure   tfmt.CalculateBootFatRoot;
                      writeln('!!!!!!! in',I);
                    end; }
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+                { reset drive }
+                with regs do begin
+                DL := drvnum;
+                AX := 0;
+                intr($13,regs);
+                end;
+{$ELSE}
                 { reset drive }
                 DL := drvnum;
                 AX := 0;
                 intr($13,regs);
+{$ENDIF}{$ENDIF}
 
 
 
@@ -2693,6 +2842,23 @@ procedure   tfmt.CalculateBootFatRoot;
               end;
 
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+              with regs do begin
+              GetAbsSector(0,BootS,CH,DH,CL);
+                AH := $2;
+                AL := 1;
+                DL := drvnum;
+                ES := Seg(BootS);
+                BX := Ofs(BootS);
+                intr($13,Regs);
+              end;
+
+                IO_Error := CheckIOError or $800;
+                If CheckErrors then Exit ;
+
+
+        if FAT<>Nil then
+{$ELSE}
               GetAbsSector(0,BootS,CH,DH,CL);
                 AH := $2;
                 AL := 1;
@@ -2706,16 +2872,25 @@ procedure   tfmt.CalculateBootFatRoot;
 
 
         if FAT<>Nil then
+{$ENDIF}{$ENDIF}
 
            if fMode = fmQuickFormat Then
 
               begin
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+              for I:=1 to FatSz do
+              with regs do
+                begin
+                     GetAbsSector(Pred(Bsize + I),BootS,CH,DH,CL);
+                     AH := $2;
+{$ELSE}
               with regs do
               for I:=1 to FatSz do
                 begin
                      GetAbsSector(Pred(Bsize + I),BootS,CH,DH,CL);
                      AH := $2;
+{$ENDIF}{$ENDIF}
                      AL := 1;
                      DL := drvnum;
                      ES := Seg(FAT^);
@@ -2741,9 +2916,15 @@ procedure   tfmt.CalculateBootFatRoot;
 
 
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+               for I:=1 to FatSz do
+              with regs do
+                begin
+{$ELSE}
               with regs do
                for I:=1 to FatSz do
                 begin
+{$ENDIF}{$ENDIF}
                   {
                      write(#13#10' wr #1 fat ...#',I:2);
                   }
@@ -2795,9 +2976,15 @@ procedure   tfmt.CalculateBootFatRoot;
 
                    end;
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+            for I:=1 to RootS do
+           with regs do
+             begin
+{$ELSE}
            with regs do
             for I:=1 to RootS do
              begin
+{$ENDIF}{$ENDIF}
 
                 GetAbsSector(pred(Bsize + FatSz * fsize + I),BootS,CH,DH,CL);
                  fillchar(buf,sizeof(buf),0);

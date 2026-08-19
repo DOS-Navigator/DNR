@@ -41,6 +41,13 @@ function ElapsedTimeInSecs(ET : TEventTimer) : LongInt;
 
 procedure DelayTics(Tics : LongInt);
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Exported so other units (FORMAT.PAS) can reuse the Win32 substitute
+  instead of re-deriving their own - the original i8086/TP BiosTics was
+  never exported (a private implementation var), and callers there
+  either declare their own local copy or don't need one at all. }
+function BiosTics: LongInt;
+{$ENDIF}
 
 implementation
 {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}

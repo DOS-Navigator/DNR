@@ -620,7 +620,7 @@ intended edit), not by inspection - anchor on enough trailing context
 unambiguous, and assert the anchor's occurrence count is exactly 1
 before trusting a match.
 
-## What's left for Win32 (22/99, up from 10/99)
+## What's left for Win32 (22/99, up from 10/99) - see session 8, this is stale
 
 - FORMAT.PAS - the one unit in i8086's 23 that isn't in win32's 22 yet.
   Per session 5's investigation of FMTUNIT.PAS, FORMAT.PAS has its own
@@ -636,6 +636,156 @@ before trusting a match.
 - The remaining 77 still-failing units are unexplored past their own
   first compile error, same caveat as session 6: no claim about which
   are mechanical without reading past that first error.
+
+# Session 8: FORMAT.PAS ported - win32 and i8086 now compile the SAME 23 units
+
+## Headline
+
+FORMAT.PAS (2,900 lines, DN's actual "Format Disk" feature, confirmed
+live via the DNFORMAT.PAS/TFormatter(TFMT) call chain - not orphaned
+like FMTUNIT.PAS) now compiles clean on both targets. i8086-msdos
+unchanged at 23/99; win32 goes 22 -> 23/99, and for the first time the
+two targets' passing sets are EXACTLY IDENTICAL, not just close. User
+chose "full mechanical scaffold" over gating the feature at a higher
+level when the initial survey found 30+ raw INT13h/INT21h calls spread
+across the whole file - see the two options weighed at the time this
+session started.
+
+## The size estimate from the initial survey was wrong, in the useful direction
+
+A first grep for `intr(`/`mem[`/`assembler;`/`Absolute $` found 30+
+hits and looked like a huge undertaking. A throwaway test program
+showed FPC's win32 `Dos` unit compiles `Registers`/`Intr`/register-field
+access (AH, AL, CH, DL, etc.) FINE as syntax - harmless/inert at
+runtime (no real BIOS to interrupt), but not a compile error. So the
+large majority of those 30+ intr() call sites needed NO scaffolding at
+all; the actual blockers were much narrower: `mem[$0:...]` array
+accesses (no Win32 segment-0 concept), a handful of genuine LES/LDS
+`assembler;` blocks, one more `absolute $40:$6C` variable (a second,
+independent copy of the same BIOS tick counter XTIME.PAS's BiosTics
+already substitutes for), and - the one that took the most work to
+isolate - a real FPC compiler quirk. Fixed top-to-bottom, re-checking
+after each batch, since later errors in a 2,900-line file can be
+cascades from an earlier one rather than independent problems (verified
+once: an "Illegal counter variable" at CheckFilesOnDisk reproduced as a
+false alarm in a minimal repro before MaxAvail was fixed, though it
+turned out to be real once the file compiled further - see below).
+
+## Two dead-code discoveries that shrank the job further
+
+- `ATSetDrive` (a LES-using `assembler;` routine matching the earlier
+  FMTUNIT.PAS/BOOTsector pattern) and its caller `setdrive` are both
+  inside a `(* ... *)` block comment spanning ~55 lines - never
+  compiled even under i8086/TP. No port needed at all.
+- `initDBT`/`initBoot`: LES-based copies of constant byte blobs (a disk
+  base table, a full 512-byte boot-sector image) into a destination
+  pointer. These ARE pure data-copying with zero hardware dependency in
+  isolation, so a byte-exact port was briefly considered - but their
+  output is never written anywhere real once `runFormat` (this unit's
+  one true entry point, confirmed via the DNFORMAT.PAS call chain)
+  refuses immediately on Win32. Scaffolded as no-ops instead of
+  hand-transcribing ~530 bytes of hex for data nothing will ever read,
+  matching BOOTsector's own treatment in FMTUNIT.PAS (session 6).
+
+## nullcluster/markcluster/getcluster: genuinely mechanical, not Tier-3
+
+Classic FAT12 packed-cluster bit manipulation (cluster*1.5 byte offset,
+odd/even nibble sharing across a 3-byte pair) on an in-memory FAT
+buffer via `var FAT` - zero hardware dependency, same category as
+TCollection/TRect (session 5) and HELPKERN's Scan/TextToLine (session
+6). Derived by hand-tracing the byte-offset and mask arithmetic, then
+cross-checked for self-consistency: nullcluster's clearing masks
+($F000 even / $000F odd) and markcluster's set patterns ($0FF7 even /
+$FF70 odd - the FAT12 bad-cluster marker $FF7 shifted into an odd
+cluster's bit 4..15 position) agree with getcluster's own extraction
+(>>4 odd / &$FFF even). A real, working mechanical port, ported once,
+used on both targets uniformly (`{$IFDEF FPC}`, no CPUI8086 split
+needed since neither branch cares about segmented vs. flat memory).
+
+## The FPC compiler quirk: `with <object-field: Registers> do` + `for`
+
+The one genuinely new finding this session, isolated by a minimal
+repro rather than guessed at: FPC (at least 3.2.2, win32 target)
+reports "Illegal counter variable" for ANY `for` loop lexically nested
+inside a `with X do` where X is an object's own field of type
+`Registers` - even when the loop body never references a register
+field at all, and independent of whether register fields inside the
+loop are qualified or bare. Confirmed with a 15-line standalone repro
+before touching the real file, and confirmed a second time that a
+BARE for-loop with an empty body still triggers it merely by being
+inside the with-scope. i8086/ppcross8086 does not have this quirk (the
+original unmodified code already compiles there), so every fix here is
+FPC+win32-only, i8086 branch untouched.
+
+The general fix is "get `regs` out of the active with-clause before any
+for loop is reached." Two shapes, chosen based on how tight the loop
+is:
+
+- If a `with regs do` immediately precedes the `for`, swap the nesting
+  order - `for I:=1 to N do with regs do begin...end` is semantically
+  identical and does not trigger the bug (used at 4 sites: 3 loops in
+  CheckFilesOnDisk had this shape already, one initially fixed this
+  way in WriteBootFatRoot before the deeper problem was found there).
+- If the `with regs do` is a large OUTER wrapper around a whole
+  function body (WriteBootFatRoot's `with BootS,DBT,regs do
+  begin...end` spanning ~200 lines, several for-loops among them), the
+  swap trick doesn't reach far enough - the outer with is still active
+  around each loop regardless of any inner with added around it.
+  Dropping `regs` from the outer with-clause entirely and re-adding
+  narrow `with regs do` blocks only around the handful of
+  non-loop statements that needed bare register-field access was the
+  real fix. Found by tracing every `with regs do` and every `for`
+  inside the function by hand and checking which for-loops were still
+  lexically inside SOME with-regs-do after the local swaps - the
+  now-famous FMTUNIT.PAS lesson recurring at a different scale: reading
+  past the first apparent fix to confirm the actual scope of a problem.
+
+## Two more self-inflicted mistakes worth recording
+
+- The `end;` search regex used throughout this session's scaffold
+  scripts (`^end;`) is COLUMN-0-anchored. Every file ported through
+  session 7 happened to have its procedure/function `end;` at column 0;
+  FORMAT.PAS indents its `end;` lines, so the regex walked straight
+  past the real closing line and matched the next unindented `end;` far
+  later in the file - silently wrapping everything in between in the
+  wrong IFDEF. Caught by the compiler ("$ENDIF expected for $ELSE"
+  reporting line numbers ~900 lines from the intended edit), not by
+  inspection. Fixed by allowing leading whitespace in the pattern
+  (`^[ \t]*end;`); this is now the version to reuse for any file, not
+  just ones matching the earlier files' column-0 convention.
+- `xTime`'s BiosTics (session 7) was never exported via its INTERFACE
+  section, only its implementation - true even for the original,
+  unmodified i8086/TP source, where FORMAT.PAS never needed it (its own
+  independent `Timer` variable read the same address directly). Adding
+  a second, independent user of `xTime.BiosTics` needed the function
+  prototype added to `xTime`'s interface too; the errors this produced
+  ("Identifier not found BiosTics") were invisible until FORMAT.PAS
+  compiled far enough to reach the call sites, because an earlier fatal
+  error had been aborting compilation before that point every time
+  through session 8's earlier iterations.
+
+## What's left for Win32 (23/99, now IDENTICAL to i8086's 23/99)
+
+The two targets' passing sets have fully converged for the first time.
+Everything left is a genuinely shared gap, not a win32-specific one:
+
+- DRIVERS.PAS's own keyboard/console input path (`_GetKeyEvent`, raw
+  INT 16h) - unchanged from session 6/7's note, still not scoped. This
+  is where QueryShiftState (session 7) will eventually get wired in for
+  real, once there's an actual Win32 console-input loop to call it
+  from - and, per this session's finding, DRIVERS.PAS almost certainly
+  has its own instances of the `with <Registers field> do` + `for`
+  compiler quirk to work through, given how much INT16h/regs-record
+  code it holds.
+- MODEMIO.PAS (needs OOCOM, not in this repository) and OVERLAYS.PAS
+  (BP overlay manager, NO_OVERLAY is set) - unchanged, pre-existing
+  optional-subsystem gaps on i8086 too, not win32-specific.
+- The remaining 76 still-failing units are unexplored past their own
+  first compile error. Given this session's own FORMAT.PAS-size-
+  estimate lesson (a 30+-hit grep looked much bigger than the real
+  compile-blocker count turned out to be, once intr()/Registers were
+  confirmed to compile fine on win32), do not assume any of them are
+  either large or small without actually reading their first error.
 
 ## Reproduce (win32)
 
