@@ -129,6 +129,15 @@ const
      Para22   : TParaType =($DF,$02,$25,$02,22,$02,$FF,$01,$DA,$0F,$08);
 var  DPB      : TParaType;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Raw BIOS INT 13h floppy I/O / a literal boot-sector image - no
+  Win32 equivalent, and this whole unit is unused by the rest of
+  the tree (grep confirms no unit `uses FmtUnit`). Fails cleanly
+  rather than pretending hardware access exists; see TOOLCHAIN.md. }
+Procedure BOOTsector;
+begin
+end;
+{$ELSE}
 Procedure BOOTsector; assembler;
 asm db 235, 60,144, 68, 78, 32, 49, 46, 48, 32, 32,  0,  2,  0,  1,  0
     db   2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  2,  0,  0,  0,  0,  0
@@ -163,7 +172,15 @@ asm db 235, 60,144, 68, 78, 32, 49, 46, 48, 32, 32,  0,  2,  0,  1,  0
     db  97,100,121, 13, 10,  0, 73, 79, 32, 32, 32, 32, 32, 32, 83, 89
     db  83, 77, 83, 68, 79, 83, 32, 32, 32, 83, 89, 83,  0,  0, 85,170
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure GetIOCTL;
+begin
+  FillChar(IOCTL, SizeOf(IOCTL), 0);
+  IOError := 1;
+end;
+{$ELSE}
 Procedure GetIOCTL; assembler;
 asm     mov  ax,$440D
         mov  cx,$0860
@@ -178,7 +195,13 @@ asm     mov  ax,$440D
         mov  IOError,al
 @Exit:
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure CheckDStep;
+begin
+end;
+{$ELSE}
 Procedure CheckDStep; assembler;
 asm     push ax
         xor  ax,ax
@@ -198,7 +221,14 @@ asm     push ax
 @Reset: and  byte ptr es:[490h+si],not $20
 @Exit:  pop  ax
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure ReadSector;
+begin
+  IOError := 1;
+end;
+{$ELSE}
 Procedure ReadSector; assembler;
 asm     mov  ax,SecNo
         div  byte ptr SecPerT
@@ -218,7 +248,14 @@ asm     mov  ax,SecNo
         xor  ah,ah
 @Exit:  mov  IOError,ah
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure WriteSector;
+begin
+  IOError := 1;
+end;
+{$ELSE}
 Procedure WriteSector; assembler;
 asm     mov  ax,SecNo
         div  byte ptr SecPerT
@@ -238,12 +275,19 @@ asm     mov  ax,SecNo
         xor  ah,ah
 @Exit:  mov  IOError,ah
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure SetDrive(MediaByte,Parm : Byte);
+begin
+end;
+{$ELSE}
 Procedure SetDrive(MediaByte,Parm : Byte);
 begin
  asm mov ah,17;mov dl,CurDrive;mov al,Parm; int $13;end;
  mem[0:$490+CurDrive]:=MediaByte;
 end;
+{$ENDIF}
 
 Function PrepareFormat : Boolean;
 label BadPar;
@@ -335,7 +379,11 @@ BadPar: PrepareFormat:=False;EndFormat;Exit;
                          then SetDrive($B7,2)
                          else SetDrive($34,3);
  end;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ { drive reset (INT 13h AH=0): no Win32 meaning, skipped }
+{$ELSE}
  asm mov  ah,0; mov dl,CurDrive; int $13;end;
+{$ENDIF}
  if FormatMode=2 then Exit;FormatMode:=0;
  if Uncondition then Exit;
  Side:=1;Cylinder:=TCylinders-3 or 1;VerifyTrack;
@@ -349,6 +397,9 @@ Procedure EndFormat;
 begin
  if SecDescr<>NIL then Dispose(SecDescr);
  SetIntVec($1E, Old1E); SecDescr:=NIL;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ { drive reset + media-type set (INT 13h): no Win32 meaning, skipped }
+{$ELSE}
  asm mov ah, 0h;
      mov dl, CurDrive;
      int 13h
@@ -357,8 +408,15 @@ begin
      mov dl, CurDrive
      int 13h
  end;
+{$ENDIF}
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure FormatTrack;
+begin
+  IOError := 1;
+end;
+{$ELSE}
 Procedure FormatTrack; assembler;
 asm      call CheckDStep
          mov  cx,22
@@ -384,7 +442,14 @@ asm      call CheckDStep
          xor  ah,ah
  @Exit:  mov  IOError,ah
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Function Verify;
+begin
+  Verify := True;
+end;
+{$ELSE}
 Function Verify; assembler;
 asm      call CheckDStep
          mov  ax,$0401
@@ -398,7 +463,14 @@ asm      call CheckDStep
          inc  al
 @Ex:
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure VerifyTrack;
+begin
+  IOError := 1;
+end;
+{$ELSE}
 Procedure VerifyTrack; assembler;
 asm      call CheckDStep
          mov  ah,4
@@ -412,10 +484,15 @@ asm      call CheckDStep
          mov  ah,0
 @Ex:     mov  IOError,ah
 end;
+{$ENDIF}
 
 begin
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ NumOfDrives:=0; { no BIOS equipment word on Win32 }
+{$ELSE}
  if mem[$40:$10] and 1>0 then NumOfDrives:=mem[$40:$10] shr 6+1
                          else NumOfDrives:=0;
+{$ENDIF}
  GetIntVec($1E, Old1E); VolumeLabel:='';
 end.
 

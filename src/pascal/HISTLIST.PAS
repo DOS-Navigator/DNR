@@ -96,6 +96,31 @@ uses Memory;
 
 { Advance CurString to next string with an ID of CurId }
 
+{$IFDEF FPC}
+procedure AdvanceStringPointer;
+var
+  Buf: PByteArray;
+  Pos: Word;
+begin
+  if CurString = nil then Exit;
+  Buf := PByteArray(HistoryBlock);
+  Pos := Word(LongInt(CurString) - LongInt(HistoryBlock));
+  repeat
+    Pos := Pos + 1 + Buf^[Pos];
+    if Pos >= HistoryUsed then
+    begin
+      CurString := nil;
+      Exit;
+    end;
+    if Buf^[Pos + 1] = CurId then
+    begin
+      CurString := PString(@Buf^[Pos + 2]);
+      Exit;
+    end;
+    Pos := Pos + 2;
+  until False;
+end;
+{$ELSE}
 procedure AdvanceStringPointer; near; assembler;
 asm
         PUSH    DS
@@ -122,9 +147,24 @@ asm
         MOV     CurString.Word[0],SI
         MOV     CurString.Word[2],DX
 end;
+{$ENDIF}
 
 { Deletes the current string from the table }
 
+{$IFDEF FPC}
+procedure DeleteString;
+var
+  Buf: PByteArray;
+  EntryStart, NextStart, Tail: Word;
+begin
+  Buf := PByteArray(HistoryBlock);
+  EntryStart := Word(LongInt(CurString) - LongInt(HistoryBlock)) - 2;
+  NextStart := EntryStart + 3 + Buf^[EntryStart + 2];
+  Tail := HistoryUsed - NextStart;
+  Move(Buf^[NextStart], Buf^[EntryStart], Tail);
+  HistoryUsed := EntryStart + Tail;
+end;
+{$ELSE}
 procedure DeleteString; near; assembler;
 asm
         PUSH    DS
@@ -145,9 +185,35 @@ asm
         POP     DS
         MOV     HistoryUsed,DI
 end;
+{$ENDIF}
 
 { Insert a string into the table }
 
+{$IFDEF FPC}
+procedure InsertString(Id: Byte; const Str: String);
+var
+  Buf: PByteArray;
+  EntrySize, DataEnd, Marker: Word;
+  StrLen: Byte;
+begin
+  Buf := PByteArray(HistoryBlock);
+  StrLen := Length(Str);
+  EntrySize := StrLen + 3;
+  DataEnd := HistoryUsed;
+  while DataEnd + EntrySize >= HistorySize do
+  begin
+    Marker := DataEnd - 1;
+    while (Marker > 0) and (Buf^[Marker] <> 0) do Dec(Marker);
+    DataEnd := Marker;
+  end;
+  Move(Buf^[0], Buf^[EntrySize], DataEnd);
+  HistoryUsed := DataEnd + EntrySize;
+  Buf^[1] := 0;
+  Buf^[2] := Id;
+  Buf^[3] := StrLen;
+  if StrLen > 0 then Move(Str[1], Buf^[4], StrLen);
+end;
+{$ELSE}
 procedure InsertString(Id: Byte; const Str: String); near; assembler;
 asm
         PUSH    DS
@@ -205,6 +271,7 @@ asm
 
         POP     DS
 end;
+{$ENDIF}
 
 procedure StartId(Id: Byte); near;
 begin
@@ -293,13 +360,31 @@ begin
     HistoryStr := '';
 end;
 
+{$IFDEF FPC}
+procedure ClearHistory;
+begin
+  FillChar(HistoryBlock^, HistorySize, 0);
+  HistoryUsed := 1; { the permanent pad byte at offset 0 }
+end;
+{$ELSE}
 procedure ClearHistory;
 begin
   FillChar(HistoryBlock^, HistorySize, 0);
   PChar(HistoryBlock)^ := #0;
   HistoryUsed := PtrRec(HistoryBlock).Ofs + 1;
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure StoreHistory(var S: TStream);
+var
+  Size: Word;
+begin
+  Size := HistoryUsed;
+  S.Write(Size, SizeOf(Word));
+  S.Write(HistoryBlock^, Size);
+end;
+{$ELSE}
 procedure StoreHistory(var S: TStream);
 var
   Size: Word;
@@ -308,7 +393,21 @@ begin
   S.Write(Size, SizeOf(Word));
   S.Write(HistoryBlock^, Size);
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure LoadHistory(var S: TStream);
+var
+  Size, I: Word;
+begin
+  S.Read(Size, SizeOf(Word));
+  if HistoryBlock = nil then InitHistory;
+  if HistorySize < Size then I := Size - HistorySize else I := 0;
+  S.Read(HistoryBlock^, Size - I);
+  S.Seek(S.GetPos + I);
+  HistoryUsed := Size;
+end;
+{$ELSE}
 procedure LoadHistory(var S: TStream);
 var
   Size, I: Word;
@@ -320,12 +419,25 @@ begin
   S.Seek(S.GetPos + I);
   HistoryUsed := PtrRec(HistoryBlock).Ofs + Size;
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure InitHistory;
+begin
+  { MemAllocSeg guaranteed Ofs(HistoryBlock)=0 on i8086, which the
+    original algorithm leaned on; this rewrite is offset-agnostic
+    (see AdvanceStringPointer/DeleteString/InsertString above), so
+    plain GetMem is sufficient here on both targets. }
+  GetMem(HistoryBlock, HistorySize);
+  ClearHistory;
+end;
+{$ELSE}
 procedure InitHistory;
 begin
   HistoryBlock := MemAllocSeg(HistorySize);
   ClearHistory;
 end;
+{$ENDIF}
 
 procedure DoneHistory;
 begin

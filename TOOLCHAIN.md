@@ -407,7 +407,7 @@ re-sweep after all of the above: still 23/99, identical set of units.
   and never writes back), and one Char cast into Pointer widened
   through PtrUInt.
 
-## What's left for Win32 (7/99, up from effectively 0)
+## What's left for Win32 (7/99, up from effectively 0) - see session 6 for the current list, this one is stale
 
 Small, independent blockers now, not one large funnel behind one file:
 
@@ -424,6 +424,128 @@ Small, independent blockers now, not one large funnel behind one file:
 - MODEMIO.PAS (needs OOCOM, a comm-port unit not in this repository)
   and OVERLAYS.PAS (BP overlay manager, NO_OVERLAY is set) - both
   optional-subsystem units, same as the pre-existing i8086 gaps.
+
+# Session 6: 7 -> 10 units (win32), and the "mechanical" note above was wrong for FMTUNIT.PAS
+
+## Headline
+
+Picked up the three files this file's own previous session flagged as
+"mechanical once reached." Two of the three (HELPKERN.PAS, HISTLIST.PAS)
+were exactly that. The third (FMTUNIT.PAS) was not - the earlier note
+was written from the FIRST compile error only, without reading past it.
+i8086-msdos unchanged at 23/99 (regression sweep re-run after every
+change below, identical unit set); win32 moves 7 -> 10/99.
+
+## FMTUNIT.PAS: not mechanical, and not live code
+
+Reading past the first `les bx,Buf` error showed this whole unit is a
+raw BIOS INT 13h floppy formatter - GetIOCTL (INT 21h/440Dh), CheckDStep
+and SetDrive (poking the BIOS media-state table at 0:$490), ReadSector/
+WriteSector/FormatTrack/VerifyTrack (INT 13h), and BOOTsector (not a
+routine at all - 512 bytes of literal 8086 machine code for a FAT12 boot
+sector, embedded as `db` bytes at the procedure's own code address, meant
+to be blitted straight onto a floppy). None of this has a Win32
+equivalent (no raw sector I/O from user mode). `grep -rln FmtUnit *.PAS`
+across the whole tree turns up nothing but the file itself - it is
+orphaned, superseded by FORMAT.PAS's own separate, self-contained INT 13h
+implementation.
+
+Ported as a Tier-3 honest scaffold (same category as TEmsStream, session
+5): the original i8086 asm kept byte-for-byte as `{$ELSE}`, every routine
+under FPC+win32 fails cleanly (IOError<>0, or Verify=True matching that
+routine's own existing "True means error" polarity) rather than
+pretending hardware access exists. Two inline `asm...end` fragments
+inside PrepareFormat/EndFormat, and the unit's `mem[$40:$10]` drive-count
+probe in its init block, got the same treatment.
+
+The guard needed a fix mid-session: a naive
+`{$IFDEF FPC}{$IFNDEF CPUI8086}...{$ELSE}...{$ENDIF}{$ENDIF}` is WRONG
+here, because its `{$ELSE}` only catches FPC+i8086, leaving plain-TP
+compilation (if anyone ever builds this with real Turbo Pascal again)
+with neither branch defined - a duplicate-def/undefined-def split that
+doesn't show up under FPC at all, which is exactly why it's easy to get
+wrong and not notice. Correct form, verified against a throwaway test
+file first: a single-level `{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+...{$ELSE}...{$ENDIF}`, which correctly puts the original asm in scope
+for BOTH plain-TP and FPC+i8086.
+
+## HELPKERN.PAS: genuinely mechanical
+
+Scan(var P; Offset; C) and TextToLine(var Text; Offset, Length; var
+Line) - a byte scan and a length-prefixed buffer copy, zero OS
+dependency. Ported the same way TCollection/TRect were in session 5,
+under plain `{$IFDEF FPC}` (applies to both targets uniformly, since
+neither routine cares about segmented vs. flat memory).
+
+## HISTLIST.PAS: real, live, byte-packed - ported carefully, not scaffolded
+
+`uses`d by 16 other units (command lines, dialogs, search boxes) - this
+is DN's actual input-history recall feature, not dead code, so getting
+the byte format wrong would silently corrupt a real feature (and its
+on-disk save file). Read AdvanceStringPointer/DeleteString/InsertString
+against EACH OTHER, not in isolation, since a byte-packed format only
+makes sense read+write+delete-consistently:
+
+    byte[0]         permanent pad, always 0, written once by
+                     ClearHistory and never touched again
+    byte[1..]        entry: [marker=0][Id][StrLen][StrLen chars],
+                     repeating back to back, new entries always
+                     inserted at offset 1 (the front); existing data
+                     shifted up by Length(Str)+3 bytes to make room
+
+CurString always points at an entry's StrLen byte (confirmed by
+DeleteString, which computes entry_start := Ofs(CurString)-2).
+AdvanceStringPointer's single `JMP @@2` bootstrap works identically
+whether CurString is fresh (pointing at byte[0], skip=0) or continuing
+past a match (pointing at a StrLen byte, skip=that string's own length)
+- both cases read as "a skip byte, then 1+skip more bytes to the next
+entry." When the shift would overflow HistorySize, InsertString evicts
+from the tail by scanning backward for a marker byte and shrinking the
+used-data boundary; ported as a plain backward byte scan.
+
+The original's `PtrRec(HistoryBlock).Ofs` / `SUB AX,DX` corrections
+throughout turned out to be a non-issue rather than something to
+replicate: InitHistory used `MemAllocSeg` specifically because it
+guarantees Ofs(HistoryBlock)=0, so every one of those corrections is
+always adding/subtracting zero in practice - confirmed by StoreHistory's
+own on-disk format, which writes `HistoryUsed - Ofs(HistoryBlock)` (the
+pure relative count) as the saved Size. The rewrite treats HistoryUsed
+as a plain 0-based count throughout, matching what was actually
+serialized, and uses ordinary GetMem in place of MemAllocSeg (no
+segment-alignment concept on Win32, and unneeded by an offset-agnostic
+rewrite regardless of target).
+
+Pointer<->offset conversions use `LongInt(Ptr)` casts, not PtrUInt: this
+file's own disabled code elsewhere (a commented-out duplicate-removal
+block in HistoryAdd) already computes
+`LongInt(CurString)-LongInt(HistoryBlock)` for the identical purpose, so
+this reuses the codebase's own established idiom - which works
+correctly on both targets (segment:offset-as-32-bit-int on i8086,
+flat-address-as-32-bit-int on win32) - rather than introducing an
+untested one.
+
+## What's left for Win32 (10/99, up from 7/99)
+
+- ShiftState: Byte absolute $40:$17 (ADVANCE.PAS) - unchanged from
+  session 5, still the biggest single remaining blocker. ~85 usage
+  sites across 20 files (re-counted this session with a plain grep,
+  not the ~60/dozen-files estimate carried since session 5), both read
+  AND write (writes are confined to FLPANEL.PAS and TERMINAL.PAS).
+  Needs a real Win32 keyboard-state abstraction (GetKeyState /
+  GetAsyncKeyState) preserving the BIOS byte's bit layout so every call
+  site keeps working unmodified - not attempted this session, still the
+  right next thing to pick up given it blocks ADVANCE.PAS (34
+  dependents) and XTIME.PAS. DRIVERS.PAS's own keyboard input path
+  (`_GetKeyEvent`, raw INT 16h) is a separate, larger piece of the same
+  problem - a full console-input driver, not just this one variable -
+  and hasn't been scoped yet.
+- MODEMIO.PAS (needs OOCOM, a comm-port unit not in this repository)
+  and OVERLAYS.PAS (BP overlay manager, NO_OVERLAY is set) - unchanged,
+  optional-subsystem units, same as the pre-existing i8086 gaps.
+- Everything else in the 89 still-failing units is unexplored past
+  whatever their own first compile error is - no claim here about
+  which of them are mechanical vs. not, after this session's FMTUNIT.PAS
+  lesson about trusting that label without reading past the first error.
 
 ## Reproduce (win32)
 
