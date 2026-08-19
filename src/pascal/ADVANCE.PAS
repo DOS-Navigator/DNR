@@ -292,7 +292,11 @@ const
          x_x     : string[3] = '*.*';
 
 var
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+    ShiftState: Byte;
+{$ELSE}
     ShiftState: Byte absolute $40:$17;
+{$ENDIF}
     Abort : Boolean;
     DOS40 : Boolean;
     OS210 : Boolean;
@@ -363,11 +367,40 @@ procedure StartOS2Session(DataLen: Word; Session: Sessiontype; Background: Boole
                           Title, Name, Args, IcoName: string);
 procedure RunOS2Command(Command: string; Bckg: Boolean; Session: SessionType);
 function  GetDateTime(Time: Boolean): string;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Live replacement for the BIOS keyboard-flags byte ShiftState used
+  to mirror automatically. kbInsState and the individual
+  kbLeftShift/kbRightShift bits are always 0 here - grep confirms
+  nothing in this tree tests them, and Win32 has no equivalent of
+  BIOS-tracked "insert mode" toggle state to report for the former. }
+function QueryShiftState: Byte;
+{$ENDIF}
 
 IMPLEMENTATION
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses xTime, Windows, Memory;
+{$ELSE}
 uses xTime;
+{$ENDIF}
 
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function QueryShiftState: Byte;
+var
+  S: Byte;
+begin
+  S := 0;
+  if GetKeyState(VK_RSHIFT) and $8000 <> 0 then S := S or kbRightShift;
+  if GetKeyState(VK_LSHIFT) and $8000 <> 0 then S := S or kbLeftShift;
+  if GetKeyState(VK_CONTROL) and $8000 <> 0 then S := S or kbCtrlShift;
+  if GetKeyState(VK_MENU) and $8000 <> 0 then S := S or kbAltShift;
+  if GetKeyState(VK_SCROLL) and $0001 <> 0 then S := S or kbScrollState;
+  if GetKeyState(VK_NUMLOCK) and $0001 <> 0 then S := S or kbNumState;
+  if GetKeyState(VK_CAPITAL) and $0001 <> 0 then S := S or kbCapsState;
+  QueryShiftState := S;
+end;
+{$ENDIF}
 
  function GetDateTime(Time: Boolean): string;
   var S: string[30];
@@ -778,6 +811,13 @@ begin
   else HexChar := Chr(Ord('A') + a - 10);
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ No Win32 console equivalent - no raw VGA text-mode font RAM to
+  reach, and nothing outside this file calls this. }
+Procedure DefineChar(n : Integer;var a);
+begin
+end;
+{$ELSE}
 Procedure DefineChar(n : Integer;var a);
 begin
  PortW[$3C4]:=$0402;
@@ -792,7 +832,14 @@ begin
  PortW[$3CE]:=$0E06;
  PortW[$3CE]:=$0004;
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure GetDChar(n : Integer;var a);
+begin
+  FillChar(a, 16, 0);
+end;
+{$ELSE}
 Procedure GetDChar(n : Integer;var a);
 begin
  PortW[$3C4]:=$0402;
@@ -807,6 +854,7 @@ begin
  PortW[$3CE]:=$0E06;
  PortW[$3CE]:=$0004;
 end;
+{$ENDIF}
 
 Procedure ClrIO;
 begin
@@ -864,6 +912,12 @@ FUNCTION Min; begin if x<y then Min:=X else Min:=Y end;
 FUNCTION Max; begin if x<y then Max:=Y else Max:=X end;
 FUNCTION Sgn; begin if x>0 then Sgn:=1 else if x<0 then Sgn:=-1 else Sgn:=0 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+PROCEDURE DosWrite( S: string );
+begin
+  System.Write(S);
+end;
+{$ELSE}
 PROCEDURE DosWrite;assembler;
 asm
   les  di,S
@@ -884,6 +938,7 @@ asm
   loop @loop
 @empty:
 end;
+{$ENDIF}
 
 FUNCTION  PosChar;
 { Position of C in S, 0 when absent. }
@@ -1954,11 +2009,21 @@ end;
 
 function CalcTmpFName; begin CalcTmpFName:=MakeNormName(SwpDir,Hex8(Id)+'.'+AExt) end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MemOK: Boolean;
+begin
+  { MemAvail/MaxAvail here resolve to Memory unit sentinel-large
+    substitutes, not System (which has neither on win32) }
+  if (MemAdjust(MemAvail) < $8000) or (MaxAvail < $4000) then MemOK := False
+    else MemOK := True;
+end;
+{$ELSE}
 function MemOK: Boolean;
 begin
   if (MemAdjust(System.MemAvail) < $8000) or (System.MaxAvail < $4000) then MemOK := False
     else MemOK := True;
 end;
+{$ENDIF}
 
 
 constructor TTextReader.Init;

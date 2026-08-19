@@ -42,7 +42,12 @@ function ElapsedTimeInSecs(ET : TEventTimer) : LongInt;
 procedure DelayTics(Tics : LongInt);
 
 
-implementation uses Dos;
+implementation
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses Dos, Windows;
+{$ELSE}
+uses Dos;
+{$ENDIF}
 type
   DayType = (Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday);
 
@@ -81,8 +86,16 @@ const
 
   TicsPerDay = 1573040;      {Assumes 18.20648 tics/sec}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function BiosTics: LongInt;
+begin
+  BiosTics := LongInt((Int64(GetTickCount64) * TicsFreq)
+                       div (Int64(SecsFreq) * 1000)) mod TicsPerDay;
+end;
+{$ELSE}
 var
   BiosTics : LongInt absolute $40:$6C;
+{$ENDIF}
 
 
 

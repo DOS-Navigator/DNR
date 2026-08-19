@@ -86,12 +86,25 @@ procedure SetMemTop(MemTop: Pointer);
 function MaxAvail: LongInt;
 {$ENDIF}{$ENDIF}
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+{ Same rationale as MaxAvail above. i8086 keeps FPCs real
+  System.MemAvail. }
+function MemAvail: LongInt;
+{$ENDIF}{$ENDIF}
+
 implementation
 
 {$IFDEF FPC}{$IFNDEF CPUI8086}
 function MaxAvail: LongInt;
 begin
   MaxAvail := High(LongInt) div 2;
+end;
+{$ENDIF}{$ENDIF}
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+function MemAvail: LongInt;
+begin
+  MemAvail := High(LongInt) div 2;
 end;
 {$ENDIF}{$ENDIF}
 

@@ -524,7 +524,7 @@ correctly on both targets (segment:offset-as-32-bit-int on i8086,
 flat-address-as-32-bit-int on win32) - rather than introducing an
 untested one.
 
-## What's left for Win32 (10/99, up from 7/99)
+## What's left for Win32 (10/99, up from 7/99) - see session 7, this is stale
 
 - ShiftState: Byte absolute $40:$17 (ADVANCE.PAS) - unchanged from
   session 5, still the biggest single remaining blocker. ~85 usage
@@ -546,6 +546,96 @@ untested one.
   whatever their own first compile error is - no claim here about
   which of them are mechanical vs. not, after this session's FMTUNIT.PAS
   lesson about trusting that label without reading past the first error.
+
+# Session 7: 10 -> 22 units (win32) - ShiftState was the real choke point
+
+## Headline
+
+Picked up ShiftState as scoped. i8086-msdos unchanged at 23/99 (full
+regression sweep re-run after every change, identical unit set); win32
+jumps 10 -> 22/99 - twelve units beyond ADVANCE.PAS/XTIME.PAS themselves
+(CELLSCOL, COMMANDS, DBWATCH, EXTRAMEM, GETCONST, INIFILES, PAR,
+RSTRINGS, SBLOCKS, STARTUP, VERSION), confirming this really was the
+single biggest remaining blocker, not just a big one. Win32's 22 passing
+units are now exactly i8086's 23 minus FORMAT.PAS - a clean convergence
+between the two targets' passing sets that wasn't planned, just fell
+out of clearing this one construct.
+
+## What ShiftState actually needed - four separate constructs, not one
+
+Cross-checked all 85 usage sites against ADVANCE.PAS's own kbRightShift/
+kbLeftShift/kbCtrlShift/kbAltShift/kbScrollState/kbNumState/kbCapsState/
+kbInsState constants ($01/$02/$04/$08/$10/$20/$40/$80) before touching
+anything: `and 3` (any Shift) and `and 4`/kbCtrlShift dominate,
+kbAltShift is tested once, kbScrollState/kbCapsState a couple of times
+each, kbNumState once; kbInsState and the individual left/right-shift
+bits are declared but never tested anywhere in the tree. ShiftState
+became a plain Byte variable (dropping `absolute`) under
+`{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}` - every read/write site
+already just does Byte bitmask operations, so none needed touching -
+plus a new QueryShiftState function (Windows.GetKeyState, matching the
+exact same bit layout, kbInsState left always-0 since Win32 has no
+equivalent "insert mode" toggle to report and nothing tests that bit
+anyway). Wiring QueryShiftState into the actual keyboard-input path is
+still DRIVERS.PAS's job, separately scoped, not attempted here - this
+session only makes the variable and a correct query function exist;
+TERMINAL.PAS's Mem[$40:$17]-based ShiftState refresh sites are the
+natural first caller once that INT 16h event loop gets its own pass.
+
+Getting ADVANCE.PAS itself to compile then surfaced three more,
+unrelated constructs behind it in the same file - the FMTUNIT.PAS
+lesson repeating (a blocker's first compile error is not its only one):
+
+- DefineChar/GetDChar - direct VGA Sequencer/Graphics-Controller port
+  I/O ($3C4/$3CE) reprogramming a custom glyph straight into text-mode
+  font plane 2. No Win32 console equivalent, and grep confirms nothing
+  outside ADVANCE.PAS calls either routine - orphaned, same as
+  FMTUNIT.PAS, same Tier-3 scaffold treatment.
+- DosWrite(S: string) - INT 21h AH=2 character-by-character output,
+  genuinely live (called from DNUTIL.PAS). Ported to a one-line
+  `System.Write(S)` - byte-for-byte equivalent, no reason to hand-roll
+  it. (COMLNKIO.PAS's own DosWrite call is a 4-argument call to the
+  standard `Dos` unit's own routine of the same name - an unrelated,
+  pre-existing overload-by-scope, not something this touched.)
+- MemOK, calling `System.MemAvail`/`System.MaxAvail` explicitly
+  qualified - the `System.` prefix forces resolution to the builtin
+  unit regardless of what else is in scope, so this couldn't just fall
+  back to session 5's MaxAvail substitute in MEMORY.PAS even though
+  ADVANCE.PAS now `uses Memory`. Fixed in two parts: added a MemAvail
+  to MEMORY.PAS right next to MaxAvail (identical rationale, identical
+  sentinel-large value, same guard shape with no `{$ELSE}` since i8086/
+  TP keep using the real System ones unshadowed), then dropped the
+  `System.` qualifier at this one call site so it resolves to Memory's
+  pair instead.
+
+One more anchoring mistake worth recording since it nearly shipped
+silently: the first attempt at DefineChar/GetDChar matched the bare
+interface FORWARD DECLARATION (no body, just a `;`) instead of the
+implementation, because both start with identical text. The `end;`
+search then had nowhere real to stop and consumed roughly 48 lines of
+unrelated code before wrapping it in an unrelated IFDEF. Caught by the
+very next compile (a syntax error at a line number nowhere near the
+intended edit), not by inspection - anchor on enough trailing context
+(here, the header text immediately followed by `begin`) to be
+unambiguous, and assert the anchor's occurrence count is exactly 1
+before trusting a match.
+
+## What's left for Win32 (22/99, up from 10/99)
+
+- FORMAT.PAS - the one unit in i8086's 23 that isn't in win32's 22 yet.
+  Per session 5's investigation of FMTUNIT.PAS, FORMAT.PAS has its own
+  separate, self-contained INT 13h floppy-format implementation
+  (tfmt.FormatTrack/tfmt.VerifyTrack) - likely the same Tier-3 shape,
+  not yet confirmed by actually reading its first compile error.
+- DRIVERS.PAS's own keyboard/console input path (`_GetKeyEvent`, raw
+  INT 16h) - unchanged from session 6's note, still not scoped. This is
+  where QueryShiftState (this session) will eventually get wired in for
+  real, once there's an actual Win32 console-input loop to call it from.
+- MODEMIO.PAS/OVERLAYS.PAS - unchanged, optional-subsystem gaps shared
+  with i8086.
+- The remaining 77 still-failing units are unexplored past their own
+  first compile error, same caveat as session 6: no claim about which
+  are mechanical without reading past that first error.
 
 ## Reproduce (win32)
 
