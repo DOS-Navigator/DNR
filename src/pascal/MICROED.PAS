@@ -1748,7 +1748,11 @@ begin
        and  cl, 7
        mov  dl, 1
        shl  dl, cl
-       test dl, ds:[di]
+       { operand order swapped for FPC: x86 TEST r/m,reg has no
+         reg,r/m encoding; TASM silently accepted the reversed
+         order, FPC does not. TEST is symmetric (AND for flags
+         only, no write-back), so this is bit-identical. }
+       test ds:[di], dl
        pop  dx
        pop  di
        jz   @@7
@@ -3209,7 +3213,7 @@ begin
                     (EvStr<>#0#0) and ((CC1 = EvStr) or (CC2 = EvStr)) then
                      begin CFind := True; Break end;
               if CFind then
-               begin CE; Message(Owner, evCommand, EditCommands[I].C, Pointer(EvStr[2])); Exit end;
+               begin CE; Message(Owner, evCommand, EditCommands[I].C, Pointer(PtrUInt(Ord(EvStr[2])))); Exit end;
               if (Event.CharCode>#31) and (Event.CharCode<#255) then InputChar;
    end;
   evBroadcast: case Event.Command of

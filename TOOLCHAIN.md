@@ -302,3 +302,134 @@ CDPLAYER's Inline() CRC32 became the Pascal its own comment documented.
 Current DN.PAS blocker: DNUTIL implementation - identifier SaveDsk
 (1635 etc., a UserSaver-family global) and one more duplicate case
 label at 1964. The funnel is now entirely inside DNUTIL.
+
+---
+
+# Session 5: OBJECTS.PAS compiles clean on BOTH targets
+
+## Headline
+
+OBJECTS.PAS - the root dependency of the whole tree - now compiles for
+**both** i8086-msdos and win32 with zero errors. This is the single
+biggest unlock available: every other unit depends on it. i8086 stayed
+at 23/99 (no regression, verified by a full re-sweep after every change
+below); win32 moved from "can't even start OBJECTS.PAS" to **7/99**,
+with the remaining blockers now spread thin across small, independent
+units instead of piling up behind one file.
+
+## What OBJECTS.PAS needed for Win32, in the order hit
+
+1. MaxAvail - a DOS heap primitive ("largest contiguous free block")
+   with no Win32 meaning. Declared only under IFDEF FPC + IFNDEF
+   CPUI8086, returning a large sentinel; i8086 keeps FPC's own native
+   System.MaxAvail untouched.
+2. TMemoryStream - stored a list of 16-bit segment values
+   (SegList: PWordArray) and reconstructed far pointers via Ptr(seg,0).
+   This cannot be type-cast into working on Win32: extracting just the
+   high 16 bits of a 32-bit pointer loses the address, which would
+   silently corrupt memory at runtime rather than just fail to compile.
+   Win32 has no 64KB block limit at all, so the segmented apparatus is
+   simply unnecessary there - replaced with one contiguous
+   GetMem/ReallocMem buffer, semantics matched line by line against the
+   original asm (read past end -> stReadError plus zero-fill; write
+   growing the stream -> grow or stWriteError; Truncate sets
+   Size := Position).
+3. TDosStream - used raw INT 21H DOS file syscalls. Ported to FPC's own
+   FileOpen/FileCreate/FileRead/FileWrite/FileSeek/FileTruncate/
+   FileClose (SysUtils) under plain IFDEF FPC - applying to BOTH
+   targets, not just Win32, since FPC's File* API already wraps the
+   same INT 21H calls internally on i8086-msdos. Mode decoding
+   (stCreate/stOpenRead/stOpenWrite/stOpen) was derived from this
+   file's own constants, not guessed: their low two bits already equal
+   FPC's fmOpenRead/fmOpenWrite/fmOpenReadWrite by design.
+4. TBufStream - a 16-bit-specific manual read/write buffering layer on
+   top of TDosStream, with buffer state packed into two Word fields
+   shared between read-ahead and write-behind modes. Rather than risk
+   mistranslating that packed state machine under time pressure, its
+   six asm methods became thin delegates to the now-portable TDosStream
+   (inherited Read/Write/Seek/GetPos/GetSize) - FPC's own File* calls
+   are already OS-buffered, so DN's extra buffering layer is a DOS-era
+   optimisation with no correctness requirement to keep on a modern OS.
+5. TEmsStream - EMS (INT 67h bank-switched memory) is 1990s hardware
+   with no Win32 equivalent whatsoever; there is nothing to port. Init
+   now unconditionally fails with stInitError under FPC - not a
+   workaround, but exactly the "no EMS board present" path every call
+   site in this codebase already handles gracefully, since DN 1.51 had
+   to run on machines with no EMS too.
+6. TCollection - 8 more methods (At, AtDelete, AtInsert, AtPut,
+   FirstThat, ForEach, IndexOf, LastThat, Pack), all ordinary
+   bounds-checked array bookkeeping with zero hardware dependency.
+   FirstThat/ForEach/LastThat take a local-function callback, so they
+   reuse the FPC local-frame-passing helper pattern already established
+   for TGroup.ForEach/FirstThat in VIEWS.PAS back in session 4.
+7. TStringCollection.Compare and TStringList.Get - a shortstring
+   compare (now SysUtils.CompareStr) and an index-lookup loop over
+   TStrIndexRec records - ordinary logic, no hardware involved.
+8. TRect - the last 6 methods (Assign/Copy/Move/Grow/Intersect/Union),
+   each read out of its asm instruction by instruction and verified
+   (Intersect takes the max of the A corners and the min of the B
+   corners per operand; Union is the reverse; Grow/Intersect both
+   inline the same "collapse to (0,0)-(0,0) if now empty" check the
+   original CheckEmpty near-helper performed).
+
+Every port above kept the original i8086 assembler as a byte-for-byte
+ELSE branch - none of it was retyped by hand, it was copied - so the
+working DOS build is provably unaffected. Confirmed by a full i8086
+re-sweep after all of the above: still 23/99, identical set of units.
+
+## Fixed alongside
+
+- RUNCMD.INC gained a fifth scaffolded routine, SaveDsk (called
+  immediately before ExecString/ExecFile at every site in DNUTIL;
+  missing from the original recovery, found only once DNUTIL itself
+  started compiling).
+- DNUTIL.PAS had one more duplicate case label (cmFormatDisk:
+  AddFormat, dead under TP semantics - RunFormat already claimed it
+  earlier in the same case statement).
+- UUCODE.PAS had its own independent Hex8Lo (same algorithm as
+  ADVANCE's, ported the same way).
+- FLPANEL.PAS: two more doubled-plus sites (a second, broader sweep
+  that does not require a space after the second +, closing this bug
+  class more completely) and a 0..100 case-range genuinely overlapping
+  cmClose=4 (an already-live, more specific arm) - split into
+  0..3, 5..100 rather than deleted, since the range itself is real and
+  intentional, not a duplicate.
+- DNSTRINGS.PAS (the renamed Strings unit) had its entire ~20-routine
+  implementation - the complete classic Borland Strings unit API,
+  verbatim per its own header comment - replaced with thin forwarders
+  to FPC's own Strings unit, which already implements the identical
+  TP7-compatible API portably. Verified clean on both targets. Same
+  reasoning as TDosStream: don't hand-port 16-bit pointer tricks when
+  the platform's own standard library already does the job correctly.
+- MICROED.PAS: one TEST reg,mem operand order that TASM silently
+  accepted but FPC's stricter encoding rejects (TEST has no reg,r/m
+  form; swapped to mem,reg - bit-identical since TEST only sets flags
+  and never writes back), and one Char cast into Pointer widened
+  through PtrUInt.
+
+## What's left for Win32 (7/99, up from effectively 0)
+
+Small, independent blockers now, not one large funnel behind one file:
+
+- ShiftState: Byte absolute $40:$17 (ADVANCE.PAS) - a raw
+  segment:offset variable mapped onto the BIOS keyboard-flags byte.
+  Roughly 60 usage sites across a dozen files, both read AND write.
+  This needs a real Win32 keyboard-state abstraction (GetKeyState /
+  GetAsyncKeyState), not a syntax fix - deliberately not rushed this
+  session given the blast radius. Blocks ADVANCE.PAS (34 dependents)
+  and XTIME.PAS on the same construct.
+- FMTUNIT.PAS, HELPKERN.PAS, HISTLIST.PAS - each one more LES/LDS
+  far-pointer asm site, same shape as everything ported this session;
+  mechanical once reached.
+- MODEMIO.PAS (needs OOCOM, a comm-port unit not in this repository)
+  and OVERLAYS.PAS (BP overlay manager, NO_OVERLAY is set) - both
+  optional-subsystem units, same as the pre-existing i8086 gaps.
+
+## Reproduce (win32)
+
+    ppc386.exe -Mtp -uWINDOWS -dDN
+      -Fi<src> -Fu<src> -Fu<units>\rtl -Fu<units>\rtl-extra -Fu<units>\rtl-objpas
+      -FE<out> -FU<out> <file.pas>
+
+rtl-objpas is new this session - needed once SysUtils entered the
+picture via TDosStream's File* calls.

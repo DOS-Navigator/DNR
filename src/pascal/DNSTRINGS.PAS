@@ -167,439 +167,118 @@ procedure StrDispose(Str: PChar);
 
 implementation
 
-{$W-}
+{ This unit's whole interface is the classic Borland Turbo Vision Strings
+  unit (see header above); FPC's own RTL "strings" unit already implements
+  the identical, TP7-compatible API portably across every target. Rather
+  than hand-porting ~20 16-bit-assembler routines (LES/LDS far-pointer
+  tricks meaningless on a flat 32-bit target), this unit forwards to it. }
 
-function StrLen(Str: PChar): Word; assembler;
-asm
-        CLD
-        LES     DI,Str
-        MOV     CX,0FFFFH
-        XOR     AL,AL
-        REPNE   SCASB
-        MOV     AX,0FFFEH
-        SUB     AX,CX
+uses
+  Strings;
+
+function StrLen(Str: PChar): Word;
+begin
+  StrLen := Word(Strings.StrLen(Str));
 end;
 
-function StrEnd(Str: PChar): PChar; assembler;
-asm
-        CLD
-        LES     DI,Str
-        MOV     CX,0FFFFH
-        XOR     AL,AL
-        REPNE   SCASB
-        MOV     AX,DI
-        MOV     DX,ES
-        DEC     AX
+function StrEnd(Str: PChar): PChar;
+begin
+  StrEnd := Strings.StrEnd(Str);
 end;
 
-function StrMove(Dest, Source: PChar; Count: Word): PChar; assembler;
-asm
-        PUSH    DS
-        CLD
-        LDS     SI,Source
-        LES     DI,Dest
-        MOV     AX,DI
-        MOV     DX,ES
-        MOV     CX,Count
-        CMP     SI,DI
-        JAE     @@1
-        STD
-        ADD     SI,CX
-        ADD     DI,CX
-        DEC     SI
-        DEC     DI
-@@1:    REP     MOVSB
-        CLD
-        POP     DS
+function StrMove(Dest, Source: PChar; Count: Word): PChar;
+begin
+  StrMove := Strings.StrMove(Dest, Source, Count);
 end;
 
-function StrCopy(Dest, Source: PChar): PChar; assembler;
-asm
-        PUSH    DS
-        CLD
-        LES     DI,Source
-        MOV     CX,0FFFFH
-        XOR     AL,AL
-        REPNE   SCASB
-        NOT     CX
-        LDS     SI,Source
-        LES     DI,Dest
-        MOV     AX,DI
-        MOV     DX,ES
-        REP     MOVSB
-        POP     DS
+function StrCopy(Dest, Source: PChar): PChar;
+begin
+  StrCopy := Strings.StrCopy(Dest, Source);
 end;
 
-function StrECopy(Dest, Source: PChar): PChar; assembler;
-asm
-        PUSH    DS
-        CLD
-        LES     DI,Source
-        MOV     CX,0FFFFH
-        XOR     AL,AL
-        REPNE   SCASB
-        NOT     CX
-        LDS     SI,Source
-        LES     DI,Dest
-        REP     MOVSB
-        MOV     AX,DI
-        MOV     DX,ES
-        DEC     AX
-        POP     DS
+function StrECopy(Dest, Source: PChar): PChar;
+begin
+  StrECopy := Strings.StrECopy(Dest, Source);
 end;
 
-function StrLCopy(Dest, Source: PChar; MaxLen: Word): PChar; assembler;
-asm
-        PUSH    DS
-        CLD
-        LES     DI,Source
-        MOV     CX,MaxLen
-        MOV     BX,CX
-        XOR     AL,AL
-        REPNE   SCASB
-        SUB     BX,CX
-        MOV     CX,BX
-        LDS     SI,Source
-        LES     DI,Dest
-        MOV     BX,DI
-        MOV     DX,ES
-        REP     MOVSB
-        STOSB
-        XCHG    AX,BX
-        POP     DS
+function StrLCopy(Dest, Source: PChar; MaxLen: Word): PChar;
+begin
+  StrLCopy := Strings.StrLCopy(Dest, Source, MaxLen);
 end;
 
-function StrPCopy(Dest: PChar; Source: String): PChar; assembler;
-asm
-        PUSH    DS
-        CLD
-        LDS     SI,Source
-        LES     DI,Dest
-        MOV     BX,DI
-        MOV     DX,ES
-        LODSB
-        XOR     AH,AH
-        XCHG    AX,CX
-        REP     MOVSB
-        XOR     AL,AL
-        STOSB
-        XCHG    AX,BX
-        POP     DS
+function StrPCopy(Dest: PChar; Source: String): PChar;
+begin
+  StrPCopy := Strings.StrPCopy(Dest, Source);
 end;
 
-function StrCat(Dest, Source: PChar): PChar; assembler;
-asm
-        PUSH    Dest.Word[2]
-        PUSH    Dest.Word[0]
-        PUSH    CS
-        CALL    NEAR PTR StrEnd
-        PUSH    DX
-        PUSH    AX
-        PUSH    Source.Word[2]
-        PUSH    Source.Word[0]
-        PUSH    CS
-        CALL    NEAR PTR StrCopy
-        MOV     AX,Dest.Word[0]
-        MOV     DX,Dest.Word[2]
+function StrCat(Dest, Source: PChar): PChar;
+begin
+  StrCat := Strings.StrCat(Dest, Source);
 end;
 
-function StrLCat(Dest, Source: PChar; MaxLen: Word): PChar; assembler;
-asm
-        PUSH    Dest.Word[2]
-        PUSH    Dest.Word[0]
-        PUSH    CS
-        CALL    NEAR PTR StrEnd
-        MOV     CX,Dest.Word[0]
-        ADD     CX,MaxLen
-        SUB     CX,AX
-        JBE     @@1
-        PUSH    DX
-        PUSH    AX
-        PUSH    Source.Word[2]
-        PUSH    Source.Word[0]
-        PUSH    CX
-        PUSH    CS
-        CALL    NEAR PTR StrLCopy
-@@1:    MOV     AX,Dest.Word[0]
-        MOV     DX,Dest.Word[2]
+function StrLCat(Dest, Source: PChar; MaxLen: Word): PChar;
+begin
+  StrLCat := Strings.StrLCat(Dest, Source, MaxLen);
 end;
 
-function StrComp(Str1, Str2: PChar): Integer; assembler;
-asm
-        PUSH    DS
-        CLD
-        LES     DI,Str2
-        MOV     SI,DI
-        MOV     CX,0FFFFH
-        XOR     AX,AX
-        CWD
-        REPNE   SCASB
-        NOT     CX
-        MOV     DI,SI
-        LDS     SI,Str1
-        REPE    CMPSB
-        MOV     AL,DS:[SI-1]
-        MOV     DL,ES:[DI-1]
-        SUB     AX,DX
-        POP     DS
+function StrComp(Str1, Str2: PChar): Integer;
+begin
+  StrComp := Strings.StrComp(Str1, Str2);
 end;
 
-function StrIComp(Str1, Str2: PChar): Integer; assembler;
-asm
-        PUSH    DS
-        CLD
-        LES     DI,Str2
-        MOV     SI,DI
-        MOV     CX,0FFFFH
-        XOR     AX,AX
-        CWD
-        REPNE   SCASB
-        NOT     CX
-        MOV     DI,SI
-        LDS     SI,Str1
-@@1:    REPE    CMPSB
-        JE      @@4
-        MOV     AL,DS:[SI-1]
-        CMP     AL,'a'
-        JB      @@2
-        CMP     AL,'z'
-        JA      @@2
-        SUB     AL,20H
-@@2:    MOV     DL,ES:[DI-1]
-        CMP     DL,'a'
-        JB      @@3
-        CMP     DL,'z'
-        JA      @@3
-        SUB     DL,20H
-@@3:    SUB     AX,DX
-        JE      @@1
-@@4:    POP     DS
+function StrIComp(Str1, Str2: PChar): Integer;
+begin
+  StrIComp := Strings.StrIComp(Str1, Str2);
 end;
 
-function StrLComp(Str1, Str2: PChar; MaxLen: Word): Integer; assembler;
-asm
-        PUSH    DS
-        CLD
-        LES     DI,Str2
-        MOV     SI,DI
-        MOV     AX,MaxLen
-        MOV     CX,AX
-        JCXZ    @@1
-        XCHG    AX,BX
-        XOR     AX,AX
-        CWD
-        REPNE   SCASB
-        SUB     BX,CX
-        MOV     CX,BX
-        MOV     DI,SI
-        LDS     SI,Str1
-        REPE    CMPSB
-        MOV     AL,DS:[SI-1]
-        MOV     DL,ES:[DI-1]
-        SUB     AX,DX
-@@1:    POP     DS
+function StrLComp(Str1, Str2: PChar; MaxLen: Word): Integer;
+begin
+  StrLComp := Strings.StrLComp(Str1, Str2, MaxLen);
 end;
 
-function StrLIComp(Str1, Str2: PChar; MaxLen: Word): Integer; assembler;
-asm
-        PUSH    DS
-        CLD
-        LES     DI,Str2
-        MOV     SI,DI
-        MOV     AX,MaxLen
-        MOV     CX,AX
-        JCXZ    @@4
-        XCHG    AX,BX
-        XOR     AX,AX
-        CWD
-        REPNE   SCASB
-        SUB     BX,CX
-        MOV     CX,BX
-        MOV     DI,SI
-        LDS     SI,Str1
-@@1:    REPE    CMPSB
-        JE      @@4
-        MOV     AL,DS:[SI-1]
-        CMP     AL,'a'
-        JB      @@2
-        CMP     AL,'z'
-        JA      @@2
-        SUB     AL,20H
-@@2:    MOV     DL,ES:[DI-1]
-        CMP     DL,'a'
-        JB      @@3
-        CMP     DL,'z'
-        JA      @@3
-        SUB     DL,20H
-@@3:    SUB     AX,DX
-        JE      @@1
-@@4:    POP     DS
+function StrLIComp(Str1, Str2: PChar; MaxLen: Word): Integer;
+begin
+  StrLIComp := Strings.StrLIComp(Str1, Str2, MaxLen);
 end;
 
-function StrScan(Str: PChar; Chr: Char): PChar; assembler;
-asm
-        CLD
-        LES     DI,Str
-        MOV     SI,DI
-        MOV     CX,0FFFFH
-        XOR     AL,AL
-        REPNE   SCASB
-        NOT     CX
-        MOV     DI,SI
-        MOV     AL,Chr
-        REPNE   SCASB
-        MOV     AX,0
-        CWD
-        JNE     @@1
-        MOV     AX,DI
-        MOV     DX,ES
-        DEC     AX
-@@1:
+function StrScan(Str: PChar; Chr: Char): PChar;
+begin
+  StrScan := Strings.StrScan(Str, Chr);
 end;
 
-function StrRScan(Str: PChar; Chr: Char): PChar; assembler;
-asm
-        CLD
-        LES     DI,Str
-        MOV     CX,0FFFFH
-        XOR     AL,AL
-        REPNE   SCASB
-        NOT     CX
-        STD
-        DEC     DI
-        MOV     AL,Chr
-        REPNE   SCASB
-        MOV     AX,0
-        CWD
-        JNE     @@1
-        MOV     AX,DI
-        MOV     DX,ES
-        INC     AX
-@@1:    CLD
+function StrRScan(Str: PChar; Chr: Char): PChar;
+begin
+  StrRScan := Strings.StrRScan(Str, Chr);
 end;
 
-function StrPos(Str1, Str2: PChar): PChar; assembler;
-asm
-        PUSH    DS
-        CLD
-        XOR     AL,AL
-        LES     DI,Str2
-        MOV     CX,0FFFFH
-        REPNE   SCASB
-        NOT     CX
-        DEC     CX
-        JE      @@2
-        MOV     DX,CX
-        MOV     BX,ES
-        MOV     DS,BX
-        LES     DI,Str1
-        MOV     BX,DI
-        MOV     CX,0FFFFH
-        REPNE   SCASB
-        NOT     CX
-        SUB     CX,DX
-        JBE     @@2
-        MOV     DI,BX
-@@1:    MOV     SI,Str2.Word[0]
-        LODSB
-        REPNE   SCASB
-        JNE     @@2
-        MOV     AX,CX
-        MOV     BX,DI
-        MOV     CX,DX
-        DEC     CX
-        REPE    CMPSB
-        MOV     CX,AX
-        MOV     DI,BX
-        JNE     @@1
-        MOV     AX,DI
-        MOV     DX,ES
-        DEC     AX
-        JMP     @@3
-@@2:    XOR     AX,AX
-        MOV     DX,AX
-@@3:    POP     DS
+function StrPos(Str1, Str2: PChar): PChar;
+begin
+  StrPos := Strings.StrPos(Str1, Str2);
 end;
 
-function StrUpper(Str: PChar): PChar; assembler;
-asm
-        PUSH    DS
-        CLD
-        LDS     SI,Str
-        MOV     BX,SI
-        MOV     DX,DS
-@@1:    LODSB
-        OR      AL,AL
-        JE      @@2
-        CMP     AL,'a'
-        JB      @@1
-        CMP     AL,'z'
-        JA      @@1
-        SUB     AL,20H
-        MOV     [SI-1],AL
-        JMP     @@1
-@@2:    XCHG    AX,BX
-        POP     DS
+function StrUpper(Str: PChar): PChar;
+begin
+  StrUpper := Strings.StrUpper(Str);
 end;
 
-function StrLower(Str: PChar): PChar; assembler;
-asm
-        PUSH    DS
-        CLD
-        LDS     SI,Str
-        MOV     BX,SI
-        MOV     DX,DS
-@@1:    LODSB
-        OR      AL,AL
-        JE      @@2
-        CMP     AL,'A'
-        JB      @@1
-        CMP     AL,'Z'
-        JA      @@1
-        ADD     AL,20H
-        MOV     [SI-1],AL
-        JMP     @@1
-@@2:    XCHG    AX,BX
-        POP     DS
+function StrLower(Str: PChar): PChar;
+begin
+  StrLower := Strings.StrLower(Str);
 end;
 
-function StrPas(Str: PChar): String; assembler;
-asm
-        PUSH    DS
-        CLD
-        LES     DI,Str
-        MOV     CX,0FFFFH
-        XOR     AL,AL
-        REPNE   SCASB
-        NOT     CX
-        DEC     CX
-        LDS     SI,Str
-        LES     DI,@Result
-        MOV     AL,CL
-        STOSB
-        REP     MOVSB
-        POP     DS
+function StrPas(Str: PChar): String;
+begin
+  StrPas := Strings.StrPas(Str);
 end;
-
-{$W+}
 
 function StrNew(Str: PChar): PChar;
-var
-  L: Word;
-  P: PChar;
 begin
-  StrNew := nil;
-  if (Str <> nil) and (Str^ <> #0) then
-  begin
-    L := StrLen(Str) + 1;
-    GetMem(P, L);
-    if P <> nil then StrNew := StrMove(P, Str, L);
-  end;
+  StrNew := Strings.StrNew(Str);
 end;
 
 procedure StrDispose(Str: PChar);
 begin
-  if Str <> nil then FreeMem(Str, StrLen(Str) + 1);
+  Strings.StrDispose(Str);
 end;
 
 end.

@@ -1767,38 +1767,18 @@ if not All then
  end else WriteLnT(o+GetLnEnd);
 end;
 
-procedure Hex8Lo(L:longInt;var HexLo);assembler;
-asm
-        cld
-        les     di,[HexLo]
-        lea     bx,[LoHexChar]
-        mov     dx,[word ptr L+2]
-        call    @@OutWord
-        mov     dx,[word ptr L+0]
-        call    @@OutWord
-        jmp     @@End
-
-@@OutWord:      {DX-word}
-        mov     ax,dx
-        mov     cl,12
-        shr     ax,cl
-        xlat
-        stosb
-        mov     al,dh
-        and     al,0Fh
-        xlat
-        stosb
-        mov     al,dl
-        mov     cl,4
-        shr     al,cl
-        xlat
-        stosb
-        mov     al,dl
-        and     al,0Fh
-        xlat
-        stosb
-        retn
-@@End:
+procedure Hex8Lo(L:longInt;var HexLo);
+{ Was 16-bit assembler (identical algorithm to ADVANCE.PAS Hex8Lo).
+  Writes the 8 lowercase hex digits of L, most significant first. }
+type TB8 = array[0..7] of Char;
+var I, D: Integer;
+begin
+  for I := 0 to 7 do
+  begin
+    D := (L shr ((7 - I) * 4)) and $F;
+    if D < 10 then TB8(HexLo)[I] := Chr(Ord('0') + D)
+    else TB8(HexLo)[I] := Chr(Ord('a') + D - 10);
+  end;
 end;
 
 

@@ -864,9 +864,9 @@ begin
      else begin
            if (Panel^.SelectedLen = Panel^.PackedLen) or (Panel^.Drive^.DriveType <> dtArc) then
             S := '~'+FStr(Panel^.SelectedLen)+GetString(dlBytesIn)+
-                 +ItoS(Panel^.SelNum)+'~'+ GetString(dlSelectedfiles) else
+                 ItoS(Panel^.SelNum)+'~'+ GetString(dlSelectedfiles) else
             S := '~'+FStr(Panel^.SelectedLen)+'('+FStr(Panel^.PackedLen)+')'+GetString(dlBytesIn)+
-                +ItoS(Panel^.SelNum)+'~'+ GetString(dlSelectedfiles);
+                ItoS(Panel^.SelNum)+'~'+ GetString(dlSelectedfiles);
           end;
     I := (Size.X - CStrLen(S)) div 2; if I < 0 then I := 0;
     MoveCStr(B[I], S, C3);
@@ -1237,7 +1237,10 @@ begin
               cmLViewFile,
               cmFindGotoFile,
               cmAdvancedFilter:*)
-              0..100:;
+              { split to exclude cmClose=4, already handled by its own
+                arm above; TP tolerated the overlap and matched cmClose
+                first, FPC requires case labels to be disjoint }
+              0..3, 5..100:;
                 else CommandHandle(Event);
              end;
   evKeyDown: if (Event.KeyCode = kbDoubleAlt) and (FMSetup.Quick = pqsAlt) or

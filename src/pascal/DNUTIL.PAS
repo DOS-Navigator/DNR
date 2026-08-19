@@ -1961,7 +1961,7 @@ begin
      cmCreatePanel: OpenWindow(True);
      cmCreateTree: OpenTreeWindow;
      cmFindFile: FindFile;
-     cmFormatDisk: AddFormat;
+     { cmFormatDisk removed: already handled by RunFormat above (line ~1850); TP matched first, so this occurrence - and the AddFormat call it made - was dead }
      cmSystemInfo: SystemInfo;
      cmMemoryInfo: MemoryInfo;
      cmShowOutput: GetUserScreen;

@@ -78,7 +78,22 @@ procedure SetMemTop(MemTop: Pointer);
 {$ENDIF}
 {$ENDIF}
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+{ Win32 (and other flat-memory targets) have no heap concept matching
+  the DOS "largest contiguous free block"; treat it as effectively
+  unlimited so callers that clamp an allocation against MaxAvail never
+  under-allocate on a modern OS. i8086 keeps FPCs real System.MaxAvail. }
+function MaxAvail: LongInt;
+{$ENDIF}{$ENDIF}
+
 implementation
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+function MaxAvail: LongInt;
+begin
+  MaxAvail := High(LongInt) div 2;
+end;
+{$ENDIF}{$ENDIF}
 
 {$IFDEF MODERN}
 

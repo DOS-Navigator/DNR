@@ -3,7 +3,7 @@
    The original file is missing from this repository (see TOOLCHAIN.md).
    It carried the bodies of DNUTIL's command-execution layer:
 
-       ExecString  SearchExt  ExecExtFile  ExecFile
+       ExecString  SearchExt  ExecExtFile  ExecFile  SaveDsk
 
    This scaffolding exists so the dependency graph can compile - DNUTIL
    gates the entire UI layer through VIEWS' implementation uses-chain.
@@ -35,4 +35,11 @@ end;
 procedure ExecFile(Name: PathStr);
 begin
   RunError(199);   { RUNCMD.INC scaffolding: ExecFile not recovered }
+end;
+
+procedure SaveDsk;
+{ Saves screen/video state before shelling to DOS; called immediately
+  before ExecString/ExecFile at every site in DNUTIL. }
+begin
+  RunError(199);   { RUNCMD.INC scaffolding: SaveDsk not recovered }
 end;
