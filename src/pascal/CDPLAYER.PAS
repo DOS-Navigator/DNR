@@ -244,8 +244,70 @@ CONST
 
 IMPLEMENTATION
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+USES Advance, DnMessages, Commands, RStrings, DNHelp, DOS, DnApp, Startup,
+     CDUtil, Strings ;
+{$ELSE}
 USES Advance, DnMessages, Commands, RStrings, DNHelp, DOS, DnApp, Startup,
      CDUtil ;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Real Win32 CD-audio control via the MCI string API (winmm.dll) -
+  verified against a standalone test program before use: the API
+  surface is correct (a real "device not installed" MCI error, not a
+  parse failure), but this dev machine has no optical drive to
+  confirm actual playback with. Declared directly rather than
+  `uses MMSystem`/`Windows`, matching this session's established
+  discipline after a real namespace collision elsewhere. }
+function WcMciSendStringA(lpstrCommand: PChar; lpstrReturnString: PChar;
+  uReturnLength: LongWord; hwndCallback: LongWord): LongWord; stdcall;
+  external 'winmm' name 'mciSendStringA';
+
+const WcCdAlias = 'ntsdncda';
+
+function WcMciOpen: Boolean;
+var C: array[0..127] of Char;
+begin
+  StrPCopy(C, 'open cdaudio alias ' + WcCdAlias);
+  WcMciOpen := WcMciSendStringA(C, nil, 0, 0) = 0;
+end;
+
+procedure WcMciClose;
+var C: array[0..63] of Char;
+begin
+  StrPCopy(C, 'close ' + WcCdAlias);
+  WcMciSendStringA(C, nil, 0, 0);
+end;
+
+{ Opens, sends one command, closes - no persistent MCI session, since
+  none of TCdPlayer's methods have a lifecycle to hook a real open/
+  close pair into (they are called one at a time from UI events). }
+function WcMciCmd(const Cmd: String): Boolean;
+var C: array[0..127] of Char;
+begin
+  WcMciCmd := False;
+  if not WcMciOpen then Exit;
+  StrPCopy(C, WcCdAlias + Cmd);
+  WcMciCmd := WcMciSendStringA(C, nil, 0, 0) = 0;
+  WcMciClose;
+end;
+
+function WcMciQuery(const Cmd: String; var Res: String): Boolean;
+var
+  C: array[0..127] of Char;
+  R: array[0..127] of Char;
+begin
+  Res := '';
+  WcMciQuery := False;
+  if not WcMciOpen then Exit;
+  StrPCopy(C, WcCdAlias + Cmd);
+  FillChar(R, SizeOf(R), 0);
+  WcMciQuery := WcMciSendStringA(C, R, SizeOf(R), 0) = 0;
+  Res := StrPas(R);
+  WcMciClose;
+end;
+{$ENDIF}
 
 CONST
   cdDrive: integer = -1;
@@ -366,6 +428,15 @@ var CNT : word;
 
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+FUNCTION CD_GetFirstDrive( var firstDrive: Integer ): integer;
+begin
+  { MCI's cdaudio alias auto-selects the system's default drive - no
+    drive-letter enumeration needed. Report one drive found. }
+  firstDrive := 0;
+  CD_GetFirstDrive := 1;
+end;
+{$ELSE}
 FUNCTION CD_GetFirstDrive( var firstDrive: Integer ): integer; assembler;
 asm
   mov ax, $1500
@@ -375,7 +446,23 @@ asm
   les bx, firstDrive
   mov es:[ bx ].word, cx
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+FUNCTION CD_Req( drv: integer;
+                  cmd: byte;
+                  size: integer;
+                  Var reqHdr: array of byte ):boolean;
+begin
+  { The raw MSCDEX request-header protocol (Q-channel subcode, UPC
+    codes, door lock) has no Win32 equivalent worth faithfully
+    replicating byte-for-byte - callers needing a real answer
+    (IsChanged/IsPaused/IsDiskPresent) now go straight to MCI instead
+    of through here. True means error, matching every caller's own
+    "if CD_Req(...) then <handle error>" convention. }
+  CD_Req := True;
+end;
+{$ELSE}
 FUNCTION CD_Req( drv: integer;
                   cmd: byte;
                   size: integer;
@@ -408,7 +495,18 @@ begin
       end
   *)
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+FUNCTION CD_IsChanged( drive: integer ): boolean;
+begin
+  { No cheap MCI equivalent of "has the disc changed since last asked"
+    - always reporting unchanged is the safe default (a caller that
+    polls this to decide whether to re-read the TOC just keeps using
+    what it already has). }
+  CD_IsChanged := False;
+end;
+{$ELSE}
 FUNCTION CD_IsChanged( drive: integer ): boolean;
 var
    reqHdr: array[ 0..39 ] of byte;
@@ -419,7 +517,16 @@ var
   CD_Req( drive, 3, 1, reqHdr );
   CD_IsChanged := ( reqHdr[ 21 ] = $FF );
  end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+FUNCTION CD_IsPaused( drive: integer ): boolean;
+var S: String;
+begin
+  WcMciQuery(' status mode', S);
+  CD_IsPaused := Pos('pause', S) > 0;
+end;
+{$ELSE}
 FUNCTION CD_IsPaused( drive: integer ): boolean;
 var
    reqHdr: array[ 0..39 ] of byte;
@@ -430,8 +537,16 @@ var
   CD_Req( drive, 3, 3, reqHdr );
   CD_IsPaused := ( reqHdr[ 21 ] and 1 = 1 );
  end;
+{$ENDIF}
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+FUNCTION CD_IsDiskPresent( drive: integer ): boolean;
+var S: String;
+begin
+  CD_IsDiskPresent := WcMciQuery(' status ready', S) and (Pos('true', S) > 0);
+end;
+{$ELSE}
 FUNCTION CD_IsDiskPresent( drive: integer ): boolean;
 var
    reqHdr: array[ 0..39 ] of byte;
@@ -447,6 +562,7 @@ var
    CD_IsDiskPresent := ( DevPar and { $801} 1 = 0 ) and
    (( Err <> 2 ) and ( Err <> 12 ))
  end;
+{$ENDIF}
 
 PROCEDURE CD_DiskInfo( drive: integer; var buf );
 var

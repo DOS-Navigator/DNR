@@ -2630,7 +2630,12 @@ procedure InstallMouseHandler(MouseHandler, ShowProc, HideProc: Pointer);
  var p : Pointer;
      I : Integer;
 begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+   { CharHeight already defaults to 16 (DRIVERS.PAS) - the standard
+     VGA 80x25 value; no BIOS byte to refresh it from on Win32. }
+{$ELSE}
  CharHeight := mem[$40:$85];
+{$ENDIF}{$ENDIF}
  (*
  {$ifndef DPMI}
  if EGAVGA then
@@ -2891,7 +2896,12 @@ begin
  end;
   DetectMouse;
   Vesa_Found := -1;
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+   { CharHeight already defaults to 16 (DRIVERS.PAS) - the standard
+     VGA 80x25 value; no BIOS byte to refresh it from on Win32. }
+{$ELSE}
   CharHeight := Mem[$40:$85];
+{$ENDIF}{$ENDIF}
   SaveExit := ExitProc;
   ExitProc := @ExitDrivers;
 end.

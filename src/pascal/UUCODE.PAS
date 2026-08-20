@@ -67,7 +67,7 @@ uses Dos
 {$IFDEF DN}
      ,Objects, Advance, Views, StartUp, Dialogs, xTime,
      DNApp, Drivers, Gauge, DnMessages, Commands, RStrings, FileCopy,
-     HistList, DNStdDlg, DNUtil
+     HistList, DNStdDlg, DNUtil, Memory
 {$ENDIF};
 
 { 5A pop dx / 58 pop ax / F7 E2 mul dx -> DX:AX, UNSIGNED (Word operands).
@@ -85,10 +85,18 @@ function longmul(X, Y: Word): Longint; inline($5A/$58/$f7/$E2);
 const
   TmpExt = 'UUS';
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither) }
+  MaxAvail := {$IFDEF DN}MemAdjust{$ENDIF}(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := {$IFDEF DN}MemAdjust{$ENDIF}(System.MaxAvail);
 end;
+{$ENDIF}
 
 
 {$IFDEF DN}
@@ -1074,6 +1082,27 @@ begin
  until Off;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure DecodeStr(var Src,Dst);
+var
+  S, D: PByteArray;
+  I: Integer;
+  C0, C1, C2, C3: Byte;
+begin
+  S := PByteArray(@Src);
+  D := PByteArray(@Dst);
+  for I := 0 to 14 do
+  begin
+    C0 := S^[I * 4];
+    C1 := S^[I * 4 + 1];
+    C2 := S^[I * 4 + 2];
+    C3 := S^[I * 4 + 3];
+    D^[I * 3]     := Byte((C0 shl 2) or (C1 shr 4));
+    D^[I * 3 + 1] := Byte((C1 shl 4) or (C2 shr 2));
+    D^[I * 3 + 2] := Byte((C2 shl 6) or C3);
+  end;
+end;
+{$ELSE}
 procedure DecodeStr(var Src,Dst);assembler;
 var     Cnt:byte;
 asm
@@ -1106,6 +1135,7 @@ asm
         jnz     @@L
         pop     ds
 end;
+{$ENDIF}
 
 procedure OutString;
 var b:array[1..45] of byte;

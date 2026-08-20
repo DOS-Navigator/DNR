@@ -174,7 +174,11 @@ procedure TSpecScroll.HandleEvent;
 begin
  if (Event.What = evKeyDown) and
     ((Event.CharCode in [^E,^S,^D,^X]) or
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+     (Event.CharCode = #0) and ((QueryShiftState and 3 <> 0) xor
+{$ELSE}
      (Event.CharCode = #0) and ((mem[0:$417] and 3 <> 0) xor
+{$ENDIF}{$ENDIF}
      (FMSetup.Options and fmoUseArrows = 0) and
      ((Event.KeyCode = kbRight) or (Event.KeyCode = kbLeft) or
       (Event.KeyCode = kbHome) or (Event.KeyCode = kbEnd)
@@ -1152,7 +1156,11 @@ begin
         (Event.KeyCode = kbHome) or (Event.KeyCode = kbEnd)))
       then CommandLine^.HandleEvent(Event);
  if Event.What = evNothing then Exit;
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+ I := QueryExtendedShiftState;
+{$ELSE}
  I := mem[$40:$18];
+{$ENDIF}{$ENDIF}
  case Event.What of
   evCommand: case Event.Command of
               cmDoSendLocated: SendLocated;
@@ -1260,7 +1268,12 @@ begin
                  begin
                    if not ((ShiftState and 3 <> 0) and ( not CommandLine^.GetState(sfVisible))) then
                     begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+                      { no Win32 equivalent of writing simulated
+                        physical key state }
+{$ELSE}
                       Mem[$40:$18] := I and $BF;
+{$ENDIF}{$ENDIF}
                       ShiftState := ShiftState and kbCapsState;
                     end else ShiftState := ShiftState and $FC;
                    SearchMask[1] := Event.CharCode;

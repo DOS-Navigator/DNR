@@ -145,10 +145,18 @@ Implementation uses Menus,DnApp,DnMessages,Dialogs,Gauge,FileCopy,
 const
   LowMemSize = $4000;  {Local setting}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither) }
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
 Procedure StdMsg(MsgNo: Byte);
 var

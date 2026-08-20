@@ -544,6 +544,24 @@ procedure TGrabber.Draw;
  var B: TDrawBuffer;
      I: Integer;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+      procedure Invert(var B; K: integer);
+      var
+        Buf: PWordArray;
+        J: Integer;
+        W: Word;
+        Attr: Byte;
+      begin
+        Buf := PWordArray(@B);
+        for J := 0 to K - 1 do
+        begin
+          W := Buf^[J];
+          Attr := (Hi(W) xor $7F) and $7F;
+          if Attr = 0 then Attr := 7;
+          Buf^[J] := (Word(Attr) shl 8) or Lo(W);
+        end;
+      end;
+{$ELSE}
       procedure Invert(var B; K: integer); assembler;
        asm
          mov cx, K
@@ -559,6 +577,7 @@ procedure TGrabber.Draw;
          add bx, 2
          loop @@1
        end;
+{$ENDIF}
 begin
   with R do
    begin

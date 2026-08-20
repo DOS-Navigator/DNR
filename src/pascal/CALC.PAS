@@ -377,7 +377,11 @@ procedure TCalcInfo.HandleEvent;
   While S[Byte(S[0])] = ' ' do Dec(S[0]);
   S1 := S; While (S1[1] = ' ') and (S1 <> '') do Delete(S1, 1, 1);
   While Pos(' ', S1) > 0 do Delete(S1, Pos(' ', S1), 1);
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+  Memory.Mark(Hp);
+{$ELSE}
   System.Mark(Hp);
+{$ENDIF}{$ENDIF}
   if (S1[1] = '=') and (S1[0] > #1) then
    begin
     P := GetFormula(System.Copy(S1, 2, 255));
@@ -737,7 +741,12 @@ procedure TCalcView.HandleEvent;
      MaxX, MaxY, K, L: Integer;
      P: PCellRec;
      FName: PathStr;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+     { kbState never declared here; QueryShiftState (Advance,
+       session 7) is used directly at its one usage site instead. }
+{$ELSE}
      kbState: Byte absolute $0:$417;
+{$ENDIF}
      X1, X2, Y1, Y2: Integer;
 
  procedure ExportToFile;
@@ -845,7 +854,11 @@ procedure TCalcView.HandleEvent;
 
  procedure CheckMark;
  begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+  Marking := QueryShiftState and $3 <> 0
+{$ELSE}
   Marking := kbState and $3 <> 0
+{$ENDIF}{$ENDIF}
  end;
 
  procedure EndMarking;
@@ -1357,7 +1370,11 @@ var Hp, Tree: Pointer;
     if P^.Options and coFormula <> 0 then
      if ContainCell(S, P^.S) then
       begin
-       System.Mark(Hp);
+     {$IFDEF FPC}{$IFNDEF CPUI8086}
+  Memory.Mark(Hp);
+{$ELSE}
+  System.Mark(Hp);
+{$ENDIF}{$ENDIF}
        CurrentCalc.X := P^.Col; CurrentCalc.Y := P^.Row;
        Tree := GetFormula(System.Copy(P^.S, 2, 255));
        P^.Value := CalcFormula(Tree);
@@ -1718,7 +1735,11 @@ begin
    P := Cells^.At(I-1);
    if P^.Options and coFormula <> 0 then
      begin
-      System.Mark(Hp);
+    {$IFDEF FPC}{$IFNDEF CPUI8086}
+  Memory.Mark(Hp);
+{$ELSE}
+  System.Mark(Hp);
+{$ENDIF}{$ENDIF}
       CurrentCalc.X := P^.Col; CurrentCalc.Y := P^.Row;
       Tree := GetFormula(System.Copy(P^.S, 2, 255));
       P^.Value := CalcFormula(Tree);

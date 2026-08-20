@@ -1471,6 +1471,15 @@ begin
   TView.Done;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function TCluster.ButtonState(Item: Integer): Boolean;
+begin
+  if (Item < 0) or (Item > 31) then
+    ButtonState := False
+  else
+    ButtonState := (EnableMask and (LongInt(1) shl Item)) <> 0;
+end;
+{$ELSE}
 function TCluster.ButtonState(Item: Integer): Boolean; assembler;
 asm
         XOR     AL,AL
@@ -1491,6 +1500,7 @@ asm
         MOV     AL,1
 @@3:
 end;
+{$ENDIF}
 
 function TCluster.DataSize: Word;
 begin

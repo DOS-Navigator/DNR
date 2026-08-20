@@ -304,6 +304,33 @@ var
   Ext: ExtStr;
 
 { Contains returns true if S1 contains any characters in S2 }
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function Contains(S1, S2: String): Boolean; near;
+var
+  I, J: Integer;
+  Target: Byte;
+begin
+  { Deliberately reproduces the original asm off-by-one - see this
+    port script for the full derivation. J=0 compares against
+    S2's own length byte instead of a real character, and the scan
+    never reaches S2's true last character. }
+  Contains := False;
+  if Length(S1) = 0 then Exit;
+  for I := 1 to Length(S1) do
+  begin
+    for J := 0 to Length(S2) - 1 do
+    begin
+      if J = 0 then Target := Byte(Length(S2))
+                else Target := Byte(S2[J]);
+      if Byte(S1[I]) = Target then
+      begin
+        Contains := True;
+        Exit;
+      end;
+    end;
+  end;
+end;
+{$ELSE}
 function Contains(S1, S2: String): Boolean; near; assembler;
 asm
         PUSH    DS
@@ -331,6 +358,7 @@ asm
 @@3:    MOV     AL,1
 @@4:    POP     DS
 end;
+{$ENDIF}
 
 begin
   ValidFileName := True;
@@ -450,7 +478,12 @@ end;
 
 procedure TSortedListBox.HandleEvent(var Event: TEvent);
 var
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  { ShiftKeys is never referenced anywhere in this procedure - dropped
+    rather than given a substitute. }
+{$ELSE}
   ShiftKeys: Byte absolute $40:$17;
+{$ENDIF}
   CurString, NewString: String;
   K: Pointer;
   Value, OldPos, OldValue: Integer;
@@ -1002,6 +1035,19 @@ begin
   else RelativePath := True;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function NoWildChars(S: String): String;
+var
+  I: Integer;
+  R: String;
+begin
+  R := '';
+  for I := 1 to Length(S) do
+    if (S[I] <> '?') and (S[I] <> '*') then
+      R := R + S[I];
+  NoWildChars := R;
+end;
+{$ELSE}
 function NoWildChars(S: String): String; assembler;
 asm
         PUSH    DS
@@ -1025,6 +1071,7 @@ asm
         STOSB
         POP     DS
 end;
+{$ENDIF}
 
 begin
   S := FileName^.Data^; ClrIO;

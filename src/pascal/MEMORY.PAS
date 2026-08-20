@@ -92,6 +92,17 @@ function MaxAvail: LongInt;
 function MemAvail: LongInt;
 {$ENDIF}{$ENDIF}
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+{ TP's Mark/Release (bulk-free everything allocated since a saved
+  heap pointer) has no FPC equivalent - not a simple linear
+  allocator. No-ops here: accepts a memory leak (temporary AST
+  nodes from repeated formula evaluation) rather than attempting a
+  real bulk free, which would need walking the caller's own data
+  structures node by node. i8086 keeps FPCs real ones. }
+procedure Mark(var P: Pointer);
+procedure Release(P: Pointer);
+{$ENDIF}{$ENDIF}
+
 implementation
 
 {$IFDEF FPC}{$IFNDEF CPUI8086}
@@ -105,6 +116,17 @@ end;
 function MemAvail: LongInt;
 begin
   MemAvail := High(LongInt) div 2;
+end;
+{$ENDIF}{$ENDIF}
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+procedure Mark(var P: Pointer);
+begin
+  P := nil;
+end;
+
+procedure Release(P: Pointer);
+begin
 end;
 {$ENDIF}{$ENDIF}
 

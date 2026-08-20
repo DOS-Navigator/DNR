@@ -468,7 +468,11 @@ procedure TDoubleWindow.HandleCommand;
      RightView := RPanel; RType := dtPanel; RPanel^.ShowView; UnLck;
     end else if not RVisible then SwitchRight; RightView^.GetBounds(R1);
   end else Message(RPanel, evCommand, cmChangeDrive, nil);
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+  if (QueryShiftState and 3 <> 0) and LSelected then RightView^.Select;
+{$ELSE}
   if (mem[$40:$17] and 3 <> 0) and LSelected then RightView^.Select;
+{$ENDIF}{$ENDIF}
  end;
 
  procedure ViewInsert;
@@ -581,7 +585,11 @@ begin
               kbCtrlRight:
                      if FMSetup.Options and fmoCtrlDifference <> 0 then
                            begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+                             if LVisible and (QueryExtendedShiftState and 1 <> 0) then
+{$ELSE}
                              if LVisible and (Mem[$40:$18] and 1 <> 0) then
+{$ENDIF}{$ENDIF}
                                 LeftView^.HandleEvent(Event) else
                                 RightView^.HandleEvent(Event);
                              Exit;
@@ -591,7 +599,11 @@ begin
               kbAlt6, kbAlt7, kbAlt8, kbAlt9:
                      if FMSetup.Options and fmoAltDifference <> 0 then
                           begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+                             if LVisible and (QueryExtendedShiftState and 2 <> 0) then
+{$ELSE}
                              if LVisible and (Mem[$40:$18] and 2 <> 0) then
+{$ENDIF}{$ENDIF}
                                 LeftView^.HandleEvent(Event) else
                                 RightView^.HandleEvent(Event);
                              Exit;

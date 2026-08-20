@@ -120,8 +120,13 @@ uses
 const
   StarChars : Array [0..5] of Char = (' ','ú','ù','','','');
   MColors: Array [0..3] of Byte = (1, 3, 9, 11);
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Ticks is never referenced anywhere in this unit - dropped rather
+  than given a substitute. }
+{$ELSE}
 var
   Ticks: Word absolute $40:$6C;
+{$ENDIF}
 
 procedure TSSaver.Update;
 begin
@@ -132,7 +137,11 @@ function TSSaver.Execute;
       W: Word;
       T: TEventTimer;
 begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+  W := Word(QueryShiftState);
+{$ELSE}
   W := memw[$40:$17];
+{$ENDIF}{$ENDIF}
   NewTimerSecs(T, 3600);
   repeat
     GetEvent(Event);
@@ -140,7 +149,11 @@ begin
     HideCursor;
     Application^.Idle;
     if StartupData.Unload and osuInactivityExit = 0 then NewTimerSecs(T, 3600);
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+  until (Event.What <> evNothing) or (Word(QueryShiftState) <> W) or TimerExpired(T);
+{$ELSE}
   until (Event.What <> evNothing) or (memw[$40:$17] <> W) or TimerExpired(T);
+{$ENDIF}{$ENDIF}
   if TimerExpired(T) then Execute := cmCancel else Execute := cmOK;
 end;
 

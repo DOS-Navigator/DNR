@@ -3,8 +3,13 @@ UNIT CCalc;
 
 interface
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses Advance, Par, RStrings, DNApp, Dialogs, Views, Objects,
+     Drivers, Commands, HistList, DNHelp, ObjType, Memory;
+{$ELSE}
 uses Advance, Par, RStrings, DNApp, Dialogs, Views, Objects,
      Drivers, Commands, HistList, DNHelp, ObjType;
+{$ENDIF}
 
 type
      Real  =  Extended;

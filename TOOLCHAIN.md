@@ -787,6 +787,203 @@ Everything left is a genuinely shared gap, not a win32-specific one:
   confirmed to compile fine on win32), do not assume any of them are
   either large or small without actually reading their first error.
 
+# Session 9: unwinding DRIVERS.PAS's dependency chain - 22 files touched, not yet complete
+
+## Headline
+
+Started this session by scoping DRIVERS.PAS itself (the keyboard/console
+input driver flagged as the next big piece since session 7). Its own
+code wasn't the blocker yet - compiling it standalone immediately pulls
+in a huge transitive dependency web (IDLERS -> DNAPP -> DIALOGS ->
+DISKTOOL -> DISKINFO -> DNSTDDLG -> DBLWND -> MEMINFO -> USERMENU ->
+CALC -> DBVIEW -> CDPLAYER -> CCALC -> DNUTIL -> ARCVIEW -> FBB ->
+UUCODE -> FLPANEL, and still going), and DRIVERS.PAS itself hasn't been
+reached yet. i8086-msdos unchanged at 23/99 (full regression sweep
+re-run at the end, identical unit set - every one of today's ~22 files
+touched, zero regressions, confirmed by the sweep not by assumption).
+Win32's sweep count is UNCHANGED at 23/99 too - none of today's fixed
+files are individually complete standalone units yet, since each has
+its OWN further transitive dependencies beyond what DRIVERS.PAS's
+specific path has exercised so far (confirmed by compiling one of
+them, IDLERS.PAS, standalone with a fresh output directory and getting
+the identical next error DRIVERS.PAS's own compile was blocked on -
+not a caching artifact, a genuine shared dependency). This is real,
+verified progress toward DRIVERS.PAS even though the sweep number
+hasn't moved - the sweep is a stricter, "fully standalone" bar than
+"unblocks the specific chain this session is following."
+
+## The repeat offenders: one root cause, eight+ occurrences
+
+Several constructs turned out to be declared independently, in
+multiple files, all pointing at the same handful of BIOS addresses or
+missing an FPC RTL feature - fixed once as a shared substitute, then
+repointed at each call site as it surfaced:
+
+- **System.MaxAvail qualification** (8 occurrences: ADVANCE session 7,
+  FORMAT/DISKTOOL session 8, WINCLP/DBVIEW/CALC(as Memory.Mark, see
+  below)/ARCVIEW/FBB/UUCODE this session) - `System.MaxAvail` forces
+  resolution to the builtin unit (which has neither on win32) even when
+  `uses Memory` is already in scope. Same fix every time: drop the
+  qualifier so it resolves to MEMORY.PAS's session-5 sentinel-large
+  substitute instead. Two variants worth remembering: DBVIEW.PAS
+  already had Memory in its INTERFACE uses clause, so adding it again
+  in the implementation produced "Duplicate identifier" - the uses
+  clause itself needed no touching there, only the function body.
+  UUCODE.PAS wraps the MemAdjust call in its own `{$IFDEF DN}` -
+  preserved as-is.
+- **ShiftState/QueryShiftState reused, 5 more sites** (DBLWND.PAS,
+  CALC.PAS's `kbState: Byte absolute $0:$417` - same linear address as
+  $40:$17, just a different segment:offset split - IDLERS.PAS's
+  `memw[$40:$17]` read as a Word instead of a Byte, and FLPANEL.PAS).
+  All resolved to session 7's QueryShiftState directly.
+- **A second BIOS flag byte needed its own substitute**: 0040:0018
+  ("KB_FLAG_1" in the standard BDA layout) distinguishes Left/Right
+  Ctrl/Alt specifically (bits 0-3) and carries physical (not toggle)
+  key-down state for the three locks plus Insert (bits 4-7) - a
+  genuinely different byte from ShiftState's own 0040:0017, first hit
+  in DBLWND.PAS's fmoCtrlDifference feature (route Ctrl+arrow by which
+  Ctrl key is physically held). Added QueryExtendedShiftState to
+  ADVANCE.PAS alongside QueryShiftState, same design, then reused it in
+  FLPANEL.PAS too. One WRITE site (FLPANEL.PAS, clearing the
+  CapsLock-physical bit to suppress a Quick Search side effect) has no
+  Win32 equivalent at all - GetKeyState/GetAsyncKeyState are read-only
+  OS queries, there is no way to write simulated physical key state -
+  scaffolded as a no-op, a minor UX nicety, not core functionality.
+- **Mark/Release** (TP's linear-heap-discipline bulk-free pair) has no
+  FPC equivalent at all (verified: "Identifier not found" for both).
+  Added as no-ops to MEMORY.PAS (accepts a memory leak - temporary
+  formula-parser AST nodes from CALC.PAS's spreadsheet recalculation -
+  rather than attempting a real bulk free, which would need walking the
+  parser's own data structures). The genuinely tricky part: CALC.PAS
+  has its OWN unrelated field `Mark: TPoint` (a cell-range selection
+  point) that shadows a bare `Mark` reference within that object's
+  methods - exactly why the original 1990s code wrote `System.Mark`
+  instead of a bare call. Fixed with explicit `Memory.Mark` qualification,
+  not a bare reference. DIALOGS.PAS/COLORSEL.PAS's own `Mark` (a
+  `TCluster.Mark(Item): Boolean` checkbox-state method) is a third,
+  unrelated identifier sharing the name by coincidence - confirmed by
+  reading every call site before concluding those two files needed no
+  changes at all.
+
+## Two genuinely new, real reimplementations - user-approved, not silently scoped
+
+Both of these mapped closely enough onto real modern Win32 APIs that
+"honest scaffold" would have thrown away working functionality for no
+reason - checked with the user before committing to the larger effort
+in each case, rather than deciding unilaterally.
+
+**WINCLP.PAS's clipboard** (7 functions: OpenClip/CloseClip/SetClip/
+GetClipSize/EmptyClip/CompactClip/GetClip) talked to Windows 3.x's
+clipboard via the DOS-box multiplex interrupt (INT 2Fh AX=1701h etc) -
+gone entirely on modern Windows, but the real Win32 Clipboard API
+(OpenClipboard/SetClipboardData/GlobalAlloc/GlobalLock, all in
+user32/kernel32) does the identical job. Declared directly as external
+imports rather than `uses Windows` - a real lesson from DISKINFO.PAS
+earlier this session, where doing that collided with the unit's own
+`GetPath` and broke three unrelated call sites. `stdcall` is mandatory
+on every one of these - verified live: without it, a call compiles but
+fails at runtime with GetLastError=87 (ERROR_INVALID_PARAMETER), a
+calling-convention mismatch under -Mtp's default. Verified end to end
+with a standalone round-trip test before touching the real file: wrote
+"Hello DN Clipboard" via GlobalAlloc/SetClipboardData, read it back via
+GetClipboardData/GlobalLock, byte-identical. CompactClip (a Windows
+3.x-specific "please shrink your memory footprint" request) has no
+modern equivalent at all and returns its argument unconditionally,
+since Windows manages clipboard memory itself now. GetClipSize/GetClip
+needed care since the original API shape (query size, then separately
+fetch data) doesn't match GetClipboardData's one-handle-locked-to-read
+model - solved by caching the HANDLE (not a locked pointer) between the
+two calls, since GlobalSize needs no lock and GetClip does its own
+lock/copy/unlock when data is actually read.
+
+**CDPLAYER.PAS's audio-CD player** (2,242 lines, ~15 private methods
+plus low-level MSCDEX helpers) talked to CD-ROM drives via MSCDEX
+(INT 2Fh AX=1500h/1510h), a DOS-only driver API. Scope genuinely
+exceeded the first estimate once surveyed - Q-channel subcode reading,
+UPC codes, and CRC-based disk-ID lookup go well beyond play/pause/stop -
+and unlike WINCLP.PAS's clipboard, this dev machine has no optical
+drive to verify actual playback against (mciSendString calls were
+confirmed to reach the real Win32 MCI subsystem and return a genuine,
+specific "device not installed" error rather than a parse failure -
+proof the API surface is used correctly, not proof audio plays).
+Both points were raised to the user before proceeding; the agreed scope
+was real MCI-backed core playback (Play/Stop/Next/Prev/Pause), with the
+deep MSCDEX-only protocol layer (CD_Req's raw request-header byte
+format, Q-channel, UPC, disk-change detection) scaffolded as honest
+degradation rather than faithfully reimplemented - replicating
+MSCDEX's byte-level IOCTL protocol against a Win32 backend would be
+artificial engineering effort for no behavioral gain, since MCI already
+abstracts TOC/position/track-count internally. `WcMciCmd`/`WcMciQuery`
+open-do-close a `cdaudio` alias per call (no persistent MCI session,
+since none of TCdPlayer's methods have a lifecycle to hook a real
+open/close pair into - they're called one at a time from UI events).
+Batch 1 (the low-level CD_GetFirstDrive/CD_Req/CD_IsChanged/
+CD_IsPaused/CD_IsDiskPresent layer) is done; the ~15 TCdPlayer action
+methods (_Play/_Stop/_Next/_Prev/_Pause/_Eject/_Door/_FForward/
+_FRewind/_Setup/_Song) are read and scoped but not yet rewritten -
+picking up here is the natural next step in this file specifically.
+
+## DNUTIL.PAS's RegArray: a real mechanical port hiding behind 136 Ofs() calls
+
+`Ofs(RFilesCollection), Ofs(RFilePanel), ...` (about 136 entries)
+looked at first like another DOS-only construct, but reading the
+consumer (`Ptr(DSEG, RegArray[I])^` in RegisterAll) showed the whole
+thing exists only because TP's const-array initializers cannot hold a
+far pointer or record value directly - the original stores each
+TStreamRec constant's OFFSET (Ofs()) into the unit's own data segment,
+then reconstructs the far pointer at runtime by combining it with DSEG
+(the current data segment, captured once at startup). On Win32's flat
+memory model there is no segment to separate from the offset in the
+first place, so the complete, non-degraded port is to store the actual
+addresses directly (`Ofs(X)` -> `@X`, `array of Word` -> `array of
+Pointer`) and drop the Ptr(DSEG,...) reconstruction entirely - full
+functionality preserved, all ~136 stream types still register, just
+via a flat pointer instead of a segment:offset trick. Bulk-substituted
+via a single scoped regex rather than 136 hand-edits, verified first
+that every Ofs() call in the file lives inside this one array.
+
+## Two anchor-mistake near-misses, both caught before they shipped
+
+- MEMINFO.PAS's AddTSRs has a nested `function aaa` declared in its own
+  var/function section, textually before AddTSRs's own `begin` - the
+  session's established `^[ \t]*end;` regex (fixed for column-0 vs.
+  indented `end;` in session 8) matched aaa's own `end;` instead of
+  AddTSRs's true closing one, corrupting the split exactly like the
+  FMTUNIT.PAS DefineChar mistake two sessions ago. Fixed the same way
+  that one was avoided: the `end;`-matching helper used throughout this
+  session's later scripts was rewritten to track begin/case/record/asm
+  -> end NESTING DEPTH token by token rather than pattern-matching the
+  first `end;`, and is now the version to reuse - GetMType/GetBusType/
+  GetHDDInfo in the same file have case statements and asm blocks with
+  their own internal `end;`s that a naive regex would have hit too, and
+  the depth-tracker handled all of them correctly on the first attempt
+  once written.
+- Skipped a `check_ifdef_balance.py` false alarm honestly rather than
+  chasing it: after the DNUTIL.PAS RegArray edit, the balance checker
+  reported "final depth: -1" - looked alarming, but the SAME check
+  against the pristine git HEAD copy of the file (before any edits)
+  reported the identical imbalance, proving it was a pre-existing
+  property of the file's own conditional-compilation directives (most
+  likely one inside a comment the naive regex doesn't distinguish from
+  real code), not something this session's edit introduced. The
+  compiler's own verdict (DNUTIL.PAS's own errors fully resolved on the
+  next compile) is what actually matters; a diagnostic script is a
+  convenience, not the authority, and is worth spot-checking against a
+  known-good baseline before trusting a red flag from it.
+
+## What's left
+
+- CDPLAYER.PAS's ~15 TCdPlayer action methods still need rewriting
+  against the WcMci* primitives (see above) - the natural next step,
+  since the MCI foundation and low-level CD_* layer are already done.
+- DRIVERS.PAS's own dependency chain continues past UUCODE.PAS/
+  FLPANEL.PAS - more LES/LDS sites and possibly more repeat-offender
+  patterns are likely still ahead before DRIVERS.PAS itself is even
+  reached, let alone compiles.
+- DRIVERS.PAS's actual keyboard/console input path (`_GetKeyEvent`,
+  raw INT 16h) - the original session-7/8 target this whole chain
+  exists to unblock - has still not been read in detail.
+
 ## Reproduce (win32)
 
     ppc386.exe -Mtp -uWINDOWS -dDN

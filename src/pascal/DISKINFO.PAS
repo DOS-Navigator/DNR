@@ -125,7 +125,47 @@ var
    BytPerSec: Word;
 
 implementation
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses Startup, ExtraMemory, DNApp, Commands, DNHelp, Tree, xTime, Memory;
+{$ELSE}
 uses Startup, ExtraMemory, DNApp, Commands, DNHelp, Tree, xTime;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ FPC 3.2.2 win32 Windows unit (-Mtp) does not expose
+  GlobalMemoryStatusEx/TMemoryStatusEx (verified: "Identifier not
+  found") - declared directly against the stable WINAPI
+  MEMORYSTATUSEX layout instead of the older GlobalMemoryStatus,
+  which IS exposed but is documented (and verified live on this
+  machine) to cap its DWord fields at 0x7FFFFFFF once physical RAM
+  exceeds 4GB, making it uninformative on any modern PC. NOT adding
+  `Windows` to the uses clause deliberately - it exports its own
+  GetPath, colliding with this unit is own GetPath and breaking
+  three unrelated call sites, found the hard way. LongBool (a
+  plain System type) needs no such import. }
+type
+  TMemoryStatusEx = record
+    dwLength: DWord;
+    dwMemoryLoad: DWord;
+    ullTotalPhys: QWord;
+    ullAvailPhys: QWord;
+    ullTotalPageFile: QWord;
+    ullAvailPageFile: QWord;
+    ullTotalVirtual: QWord;
+    ullAvailVirtual: QWord;
+    ullAvailExtendedVirtual: QWord;
+  end;
+
+function GlobalMemoryStatusEx(var Buffer: TMemoryStatusEx): LongBool; stdcall;
+  external 'kernel32' name 'GlobalMemoryStatusEx';
+  { stdcall is mandatory here - verified live: without it the call
+    compiles but fails at runtime with GetLastError=87
+    (ERROR_INVALID_PARAMETER), a calling-convention mismatch under
+    -Mtp's default convention. }
+
+var
+  FpcMemStatus: TMemoryStatusEx;
+{$ENDIF}
 
 const MaxTeam = 93;
 
@@ -244,6 +284,29 @@ procedure TDiskInfo.ReadData;
  var
      MemBlocks, I: Word;
 begin
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Abort:=Off;
+ begin
+   FillChar(FpcMemStatus, SizeOf(FpcMemStatus), 0);
+   FpcMemStatus.dwLength := SizeOf(FpcMemStatus);
+   if GlobalMemoryStatusEx(FpcMemStatus) then
+   begin
+     if FpcMemStatus.ullTotalPhys > QWord(High(LongInt)) then
+       TotalMemory := High(LongInt)
+     else
+       TotalMemory := LongInt(FpcMemStatus.ullTotalPhys);
+     if FpcMemStatus.ullAvailPhys > QWord(High(LongInt)) then
+       FreeMemory := High(LongInt)
+     else
+       FreeMemory := LongInt(FpcMemStatus.ullAvailPhys);
+   end
+   else
+   begin
+     TotalMemory := High(LongInt);
+     FreeMemory := High(LongInt);
+   end;
+ end;
+{$ELSE}
  Abort:=Off;
  asm
   int $12
@@ -251,6 +314,7 @@ begin
  end;
  TotalMemory := Longint(LongInt(MemBlocks) shl 10);
  FreeMemory := TotalMemory-Longint(PrefixSeg) shl 4;
+{$ENDIF}
  DisposeStr(Info.Title);
  DisposeStr(Info.Dir);
  DisposeStr(Info.Files);

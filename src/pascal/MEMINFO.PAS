@@ -92,6 +92,15 @@ begin DisposeStr(Item); end;
 
 var TSR : PTextColl;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Walks the DOS Memory Control Block chain (list-of-lists via INT
+  21h AH=52h) enumerating TSRs - no MCB chain on Win32, so this
+  leaves TSR (the list being populated) empty, an honest "no
+  resident programs" result rather than a fabricated one. }
+Procedure AddTSRs; far;
+begin
+end;
+{$ELSE}
 Procedure AddTSRs; far;
 var CurMCB,DevMCB,i,j : Word;
     s,s1              : String;
@@ -174,7 +183,16 @@ begin
    CurMCB:=(CurMCB+1+memw[CurMCB:3]);
  end;
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Detail view for one MCB entry from AddTSRs - unreachable once
+  AddTSRs never populates a selectable item, but still needs to
+  compile. }
+Procedure ShowInfo(Segm : Word); far;
+begin
+end;
+{$ELSE}
 Procedure ShowInfo(Segm : Word); far;
 label Unkn,BadCmdL;
 var i,j,k : Word;
@@ -264,6 +282,7 @@ begin
  end;
  if s<>'' then MessageBox(s,NIL,mfOkButton or mfInformation);
 end;
+{$ENDIF}
 
 Procedure MemoryInfo;
 var
@@ -307,7 +326,12 @@ begin
      begin
       TSRlist^.GetData(ListData);
       PS:=TSR^.At(ListData.Focus);
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+      ShowInfo(0); { AddTSRs never populates TSR under FPC+win32,
+                     so this is unreachable in practice }
+{$ELSE}
       ShowInfo(memw[Seg(PS^[36]):Ofs(PS^[36])]);
+{$ENDIF}{$ENDIF}
      end;
  until (w=cmCancel);
  Dispose(TSR,Done);
@@ -331,6 +355,12 @@ Type TCPUinfo = record
      PCmodel,PCsubModel : byte ;
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Function Speed : LongInt;
+begin
+  Speed := 0;
+end;
+{$ELSE}
 Function Speed : LongInt;
 var a,w,qq : Word;
 begin
@@ -350,10 +380,24 @@ begin
        end;
  Speed:=LongInt(a)+LongInt(qq)*65536;
 end;
+{$ENDIF}
 
+{$IFNDEF FPC}
 function _Processors: Word; far; external;
 {$L CPUType}
+{$ENDIF}
+{$IF DEFINED(FPC) AND DEFINED(CPUI8086)}
+function _Processors: Word; far; external;
+{$L CPUType}
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure GetCPUinfo(var Name, CoProc: String);
+begin
+  Name := '';
+  CoProc := '';
+end;
+{$ELSE}
 Procedure GetCPUinfo(var Name, CoProc: String);
 var s: String;
     i,y: Word;
@@ -414,11 +458,26 @@ if I and $7F >= 6 then
  {if i and 2 = 0 then S := 'None' else S := 'Installed'};
  CoProc := S;
 end;
+{$ENDIF}
 
+{$IFNDEF FPC}
 Function _MHz   : Word; far; external;
 {Function _Speed : Word; far; external;}
 {$L _MHZ.OBJ}
+{$ENDIF}
+{$IF DEFINED(FPC) AND DEFINED(CPUI8086)}
+Function _MHz   : Word; far; external;
+{Function _Speed : Word; far; external;}
+{$L _MHZ.OBJ}
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function GetSpeed(var S: String): LongInt;
+begin
+  S := '';
+  GetSpeed := 0;
+end;
+{$ELSE}
 function GetSpeed(var S: String): LongInt;
  var W: LongInt;
      A: Real;
@@ -430,6 +489,7 @@ begin
  W := Trunc(w / 5.5);
  GetSpeed := W;
 end;
+{$ENDIF}
 
 type PModel = ^TModel;
      TModel = record
@@ -439,6 +499,14 @@ type PModel = ^TModel;
       BIOSRevision: Byte;
      end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure GetMType(var S: String);
+begin
+  S := '';
+  PCModel := 0;
+  PCSubModel := 0;
+end;
+{$ELSE}
 procedure GetMType(var S: String);
  var Model, SubModel: Byte;
      P: PModel;
@@ -495,8 +563,15 @@ begin
   else S := 'Unknown machine type. Report to RIT';
  end;
 end;
+{$ENDIF}
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Function GetBusType:String;
+ begin
+   GetBusType := '';
+ end;
+{$ELSE}
  Function GetBusType:String;
  var  S : String  ;
       Ft1,Ft2,Ft3 : byte ;
@@ -606,8 +681,15 @@ end;
          if APM  then S := S + ', APM';
          GetBusType := S ;
   end;
+{$ENDIF}
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure GetHDDInfo(N: Byte; var S: String);
+begin
+  S := '';
+end;
+{$ELSE}
 procedure GetHDDInfo(N: Byte; var S: String);
  var NumFD: Byte;
      NumHD, NumCyl, NumSect, NumHeads: Byte;
@@ -629,7 +711,14 @@ begin
  S := S + 'M, ' + ItoS(NumHeads+1)+GetString(dlSI_Heads)+
       ItoS(NumCylinders)+GetString(dlSI_Tracks)+ItoS(NumSect and $3F)+GetString(dlSI_SectTrack);
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure GetDisks(var FDD: String);
+begin
+  FDD := GetString(dlSI_NotPresent);
+end;
+{$ELSE}
 procedure GetDisks(var FDD: String);
  var NumFD: Byte;
      NumHD, NumCyl, NumSect, NumHeads: Byte;
@@ -661,8 +750,20 @@ begin
    FDD := FDD + S;
   end;
 end;
+{$ENDIF}
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure SystemInfo;
+begin
+  { Every helper this dialog is built from (Speed/_Processors/GetCPUinfo/
+    _MHz/GetMType/GetBusType/GetHDDInfo/GetDisks) is raw BIOS/CMOS/port
+    I/O with no Win32 equivalent (unlike WINCLP.PAS clipboard, there is
+    no clean modern API this maps onto) - shown as unavailable rather
+    than a dialog built from strings none of them actually filled in. }
+  MessageBox('System info is not available on Win32.', nil, mfOkButton or mfInformation);
+end;
+{$ELSE}
 procedure SystemInfo;
 var
     D: PDialog;
@@ -805,5 +906,6 @@ begin
 
  Dispose(D, Done);
 end;
+{$ENDIF}
 
 end.

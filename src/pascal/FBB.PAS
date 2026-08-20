@@ -73,10 +73,18 @@ uses Advance, FileCopy, DNApp, DnMessages, Views, Objects, Dialogs, Commands,
      FreeSpc : TSize;
      Timer: TEventTimer;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ function MaxAvail: LongInt;
+ begin
+   { Memory.MaxAvail, not System's (win32 has neither) }
+   MaxAvail := MemAdjust(Memory.MaxAvail);
+ end;
+{$ELSE}
  function MaxAvail: LongInt;
  begin
    MaxAvail := MemAdjust(System.MaxAvail);
  end;
+{$ENDIF}
 
  procedure GetMaxMem;
   var l : LongInt;

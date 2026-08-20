@@ -376,6 +376,15 @@ function  GetDateTime(Time: Boolean): string;
 function QueryShiftState: Byte;
 {$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Live replacement for the SECOND BIOS keyboard-flags byte at
+  0040:0018 (distinct address from ShiftState/QueryShiftState above,
+  which is 0040:0017) - bits 0-3 distinguish Left/Right Ctrl/Alt
+  specifically, bits 4-7 are the physical key-down state (not the
+  toggle state) for Scroll/Num/Caps Lock and Insert. }
+function QueryExtendedShiftState: Byte;
+{$ENDIF}
+
 IMPLEMENTATION
 
 {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
@@ -399,6 +408,24 @@ begin
   if GetKeyState(VK_NUMLOCK) and $0001 <> 0 then S := S or kbNumState;
   if GetKeyState(VK_CAPITAL) and $0001 <> 0 then S := S or kbCapsState;
   QueryShiftState := S;
+end;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function QueryExtendedShiftState: Byte;
+var
+  S: Byte;
+begin
+  S := 0;
+  if GetKeyState(VK_LCONTROL) and $8000 <> 0 then S := S or 1;
+  if GetKeyState(VK_LMENU) and $8000 <> 0 then S := S or 2;
+  if GetKeyState(VK_RCONTROL) and $8000 <> 0 then S := S or 4;
+  if GetKeyState(VK_RMENU) and $8000 <> 0 then S := S or 8;
+  if GetKeyState(VK_SCROLL) and $8000 <> 0 then S := S or $10;
+  if GetKeyState(VK_NUMLOCK) and $8000 <> 0 then S := S or $20;
+  if GetKeyState(VK_CAPITAL) and $8000 <> 0 then S := S or $40;
+  if GetKeyState(VK_INSERT) and $8000 <> 0 then S := S or $80;
+  QueryExtendedShiftState := S;
 end;
 {$ENDIF}
 

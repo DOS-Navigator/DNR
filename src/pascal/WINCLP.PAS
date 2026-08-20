@@ -58,12 +58,58 @@ interface
  procedure SyncClipOut;
 
 Implementation
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses MicroEd, Memory;
+{$ELSE}
 uses MicroEd;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Declared directly rather than `uses Windows` - see this port
+  script for why (a namespace collision found the hard way
+  elsewhere this session). stdcall is mandatory - verified live:
+  without it these compile but fail at runtime. }
+const
+  WcCF_TEXT = 1;
+  WcGMEM_MOVEABLE = $0002;
+
+function WcOpenClipboard(hWndNewOwner: THandle): LongBool; stdcall;
+  external 'user32' name 'OpenClipboard';
+function WcCloseClipboard: LongBool; stdcall;
+  external 'user32' name 'CloseClipboard';
+function WcEmptyClipboard: LongBool; stdcall;
+  external 'user32' name 'EmptyClipboard';
+function WcGetClipboardData(uFormat: LongWord): THandle; stdcall;
+  external 'user32' name 'GetClipboardData';
+function WcSetClipboardData(uFormat: LongWord; hMem: THandle): THandle; stdcall;
+  external 'user32' name 'SetClipboardData';
+function WcGlobalAlloc(uFlags: LongWord; dwBytes: LongWord): THandle; stdcall;
+  external 'kernel32' name 'GlobalAlloc';
+function WcGlobalLock(hMem: THandle): Pointer; stdcall;
+  external 'kernel32' name 'GlobalLock';
+function WcGlobalUnlock(hMem: THandle): LongBool; stdcall;
+  external 'kernel32' name 'GlobalUnlock';
+function WcGlobalSize(hMem: THandle): LongWord; stdcall;
+  external 'kernel32' name 'GlobalSize';
+function WcGlobalFree(hMem: THandle): THandle; stdcall;
+  external 'kernel32' name 'GlobalFree';
+
+var
+  WcClipDataHandle: THandle; { set by GetClipSize, read by GetClip }
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither) }
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
  procedure SyncClipIn;
  begin
@@ -78,6 +124,12 @@ end;
  end;
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Function OpenClip : boolean ;
+ begin
+   OpenClip := WcOpenClipboard(0);
+ end;
+{$ELSE}
  Function OpenClip : boolean ; assembler ;
    asm    mov  ax,1701h
           int  2fh
@@ -85,7 +137,14 @@ end;
           jz   @@1
           mov  ax,1
    @@1:   end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Function CloseClip : boolean ;
+ begin
+   CloseClip := WcCloseClipboard;
+ end;
+{$ELSE}
  Function CloseClip : boolean ; assembler ;
    asm    mov  ax,1708h
           int  2fh
@@ -93,7 +152,29 @@ end;
           jz   @@1
           mov  ax,1
    @@1:   end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Function SetClip(var Buf; Size : word ) : boolean ;
+ var
+   H: THandle;
+   P: Pointer;
+   OK: Boolean;
+ begin
+   SetClip := False;
+   H := WcGlobalAlloc(WcGMEM_MOVEABLE, LongWord(Size) + 1);
+   if H = 0 then Exit;
+   P := WcGlobalLock(H);
+   if P = nil then begin WcGlobalFree(H); Exit; end;
+   Move(Buf, P^, Size);
+   PByteArray(P)^[Size] := 0; { null-terminate for CF_TEXT }
+   WcGlobalUnlock(H);
+   OK := WcSetClipboardData(WcCF_TEXT, H) <> 0;
+   SetClip := OK;
+   { on failure H is still ours to free; on success the clipboard owns it }
+   if not OK then WcGlobalFree(H);
+ end;
+{$ELSE}
  Function SetClip(var Buf; Size : word ) : boolean ; assembler ;
    asm
           les  bx,Buf
@@ -106,13 +187,29 @@ end;
           jz   @@1
           mov  ax,1
    @@1:   end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Function GetClipSize : longint ;
+ begin
+   WcClipDataHandle := WcGetClipboardData(WcCF_TEXT);
+   if WcClipDataHandle = 0 then GetClipSize := 0
+                           else GetClipSize := WcGlobalSize(WcClipDataHandle);
+ end;
+{$ELSE}
  Function GetClipSize : longint ; assembler ;
    asm
           mov  dx, 7  { CF_OEMTEXT }
           mov  ax,1704h
           int  2fh
    end;
+{$ENDIF}
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Function EmptyClip : boolean ;
+ begin
+   EmptyClip := WcEmptyClipboard;
+ end;
+{$ELSE}
  Function EmptyClip : boolean ; assembler ;
    asm
           mov  ax,1702h
@@ -121,6 +218,17 @@ end;
           jz   @@1
           mov  ax,1
    @@1:   end;
+{$ENDIF}
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Function CompactClip( Size : longint  ) : longint ;
+ begin
+   { Windows-3.x-specific "please shrink your footprint" request -
+     meaningless once Windows manages memory itself. The only call
+     site treats a return >= Size as "room available", true on any
+     modern machine for a text-buffer-sized allocation. }
+   CompactClip := Size;
+ end;
+{$ELSE}
  Function CompactClip( Size : longint  ) : longint ; assembler ;
    asm
           mov  cx,Size.word
@@ -128,6 +236,21 @@ end;
           mov  ax,1709h
           int  2fh
    end;
+{$ENDIF}
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Function GetClip(var Buf ) : boolean ;
+ var
+   P: Pointer;
+ begin
+   GetClip := False;
+   if WcClipDataHandle = 0 then Exit;
+   P := WcGlobalLock(WcClipDataHandle);
+   if P = nil then Exit;
+   Move(P^, Buf, WcGlobalSize(WcClipDataHandle));
+   WcGlobalUnlock(WcClipDataHandle);
+   GetClip := True;
+ end;
+{$ELSE}
  Function GetClip(var Buf ) : boolean ; assembler ;
    asm
           les  bx,Buf
@@ -138,6 +261,7 @@ end;
           jz   @@1
           mov  ax,1
    @@1:   end;
+{$ENDIF}
 
  Type
      DA  =  array [0..$FFF0] of byte ;

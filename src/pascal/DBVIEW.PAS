@@ -162,10 +162,19 @@ implementation
 uses Advance, Startup, DNHelp, DNApp, DnMessages;
 {$endif}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither); Memory is
+    already in this unit's own interface uses clause. }
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
 function TFieldListBox.GetText;
  var P: PFieldRec;

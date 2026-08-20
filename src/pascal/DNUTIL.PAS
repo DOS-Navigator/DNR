@@ -464,6 +464,215 @@ const
   +9
   {$ENDIF}
   ;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  RegArray : array[1..NumRElms] of Pointer = (
+
+  @RScroller,
+  @RListViewer,
+
+  { Register Tree }
+  @RTreeView,
+  @RHTreeView,
+  @RTreeWindow,
+  @RTreePanel,
+  @RTreeDialog,
+  @RTreeInfoView,
+  @RTreeReader,
+  @RDirCollection,
+  { Register DblWnd }
+  @RDoubleWindow,
+  { Register DiskInfo }
+  @RDiskInfo,
+  { Register FilesCol }
+  @RFilesCollection,
+  { Register FlPanel }
+  @RFilePanel,
+  @FlPanel.RInfoView,
+  @RTopView,
+  @RSeparator,
+  @RSpecScroll,
+  @RDriveLine,
+  @RArvidDrive,
+  @RDirStorage,
+  { Register FViewer}
+  @RFileViewer,
+  @RViewInfo,
+  @RFileWindow,
+  @RViewScroll,
+  @RHFileViewer,
+  { Register Menus }
+  @RMenuBar,
+  @RMenuBox,
+  @RStatusLine,
+  @RMenuPopup,
+  { Register Dialogs }
+  @RDialog,
+  @RInputLine,
+  @RButton,
+  @RCluster,
+  @RRadioButtons,
+  @RCheckBoxes,
+  @RListBox,
+  @RStaticText,
+  @RLabel,
+  @RHistory,
+  @RParamText,
+  { Register ColorSel }
+
+  @RColorSelector,
+  @RMonoSelector,
+  @RColorDisplay,
+  @RColorGroupList,
+  @RColorItemList,
+  @RColorDialog,
+  @R_BWSelector,
+
+  { Register HelpFile }
+  @RHelpTopic,
+  @RHelpIndex,
+  { Register Trash }
+  @RTrashCan,
+  @RKeyMacros,
+  { Validate registration }
+  @RRangeValidator,
+  @RPhoneCollection,
+  @RPhone,
+  @RPhoneDir,
+  @RDStringView,
+{$IFDEF Modem}
+  @RLinker,
+  @RLinkDrive,
+  @RDialBox,
+  @RAutoDialer,
+  @RScrollBackWindow,
+  @RScrollBack,
+{$ENDIF}
+  { Register MicroEd }
+  @RXFileEditor,
+  @REditWindow,
+  @RInfoLine,
+  @REditScrollBar,
+  @REditFrame,
+  @RLineCollection,
+
+{$IFDEF SpreadSheet}
+  @RCellCollection,
+  @RCalcWindow,
+  @RCalcView,
+  @RCalcInfo,
+  @Calc.RInfoView,
+{$ENDIF}
+
+{ Register Claculator }
+  @RCalcLine,
+  @RIndicator,
+
+  { Register Terminal }
+{$IFDEF Modem}
+  @RTerminal,
+  @RPortInfo,
+  @RTerminalWindow,
+{$ENDIF}
+  { Register User Screen }
+  @RUserView,
+  @RUserWindow,
+  { Register Game }
+{$IFDEF Game}
+  @RGameInfo,
+  @RGameView,
+  @RGameWindow,
+{$ENDIF}
+
+  @RDrive,
+  @RFindDrive,
+  @RArcDrive,
+  @RFileInfo,
+  @RTempDrive,
+
+{$IFDEF PrintManager}
+  { Register PrintManager}
+  @RStringCol,
+  @RPrintManager,
+  @RPrintStatus,
+  @RPMWindow,
+{$ENDIF}
+
+  { Register Setups }
+  @RSysDialog,
+  @RCurrDriveInfo,
+  @RMouseDialog,
+  @RMouseBar,
+  @RSaversDialog,
+  @RSaversListBox,
+  @RUpperTable,
+
+  @RUserSaver,
+
+  { Register Archivers }
+  @RARJArchiver,
+  @RZIPArchiver,
+  @RSQZArchiver,
+  @RHAPArchiver,
+
+  @RHAArchiver,
+  @RRARArchiver,
+  @RTARArchiver,
+  @RHYPArchiver,
+  @RHPKArchiver,
+
+  @RZOOArchiver,
+  @RARCArchiver,
+  @RLHAArchiver,
+  @RUC2Archiver,
+
+  @RBSAArchiver,
+  @RBS2Archiver,
+  @RCHZArchiver,
+  @RLIMArchiver,
+
+  @RArchiveCollection,
+
+  @RTable,
+  @RReport,
+  @RASCIIChart,
+
+  {$IFDEF CDPlayer}
+  @RCdPlayer,
+  @RCdCounter,
+  {$ENDIF}
+
+  @RTFieldListBox,
+  @RDBWindow,
+  @RDBViewer,
+  @RDBIndicator,
+
+  @RFilterValidator,
+  @RRangeValidator,
+
+  @REditHistoryCol,
+  @RViewHistoryCol,
+
+  @RDataSaver,
+  @RStringList,
+
+ {Objects}
+  @RCollection,
+  @RStringCollection,
+  @RStrCollection,
+
+ {Views}
+  @RView,
+  @RFrame,
+  @RScrollBar,
+  @RGroup,
+  @RWindow,
+
+ {App}
+  @RBackground,
+  @RDesktop,
+  @RStringCache
+ );
+{$ELSE}
   RegArray : array[1..NumRElms] of Word = (
 
   Ofs(RScroller),
@@ -671,12 +880,17 @@ const
   Ofs(RDesktop),
   Ofs(RStringCache)
  );
+{$ENDIF}
 
 procedure RegisterAll;
 var
   I: Integer;
 begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+  for I := 1 to NumRElms do RegisterType(PStreamRec(RegArray[I])^);
+{$ELSE}
   for I := 1 to NumRElms do RegisterType(PStreamRec(Ptr(DSEG,RegArray[I]))^);
+{$ENDIF}{$ENDIF}
 end;
 
 begin
