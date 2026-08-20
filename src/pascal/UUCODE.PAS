@@ -447,6 +447,45 @@ begin
  EndOfFile:=InputStream^.Eof;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function UUString(var s:string;var CRC:word):Boolean;
+var
+  L: Byte;
+  I: Integer;
+  V: Word;
+  C: Byte;
+  Buf: PByteArray;
+begin
+  UUString := False;
+  V := CRC;
+  L := Length(s);
+  Buf := PByteArray(@s);
+  FillChar(Buf^[L + 1], 70, 0);
+
+  C := Byte(s[1]);
+  V := (V shr 1) or ((V and 1) shl 15);
+  Inc(V, C);
+  if (C < Ord('!')) or (C > Ord('`')) then Exit;
+  Buf^[1] := Byte((C - Ord(' ')) and $3F);
+
+  I := 2;
+  while I <= L do
+  begin
+    C := Byte(s[I]);
+    if C = 0 then Break;
+    V := (V shr 1) or ((V and 1) shl 15);
+    Inc(V, C);
+    if (C < Ord(' ')) or (C > Ord('`')) then Exit;
+    Buf^[I] := Byte((C - Ord(' ')) and $3F);
+    Inc(I);
+  end;
+
+  V := (V shr 1) or ((V and 1) shl 15);
+  Inc(V, 10);
+  CRC := V;
+  UUString := True;
+end;
+{$ELSE}
 function UUString(var s:string;var CRC:word):Boolean;assembler;
 asm
         cld
@@ -502,7 +541,25 @@ asm
         mov     al,1
 @@End:  pop     ds
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MemEqu(var A,B; Size : Word) : Boolean;
+var
+  PA, PB: PByteArray;
+  I: Word;
+begin
+  MemEqu := True;
+  PA := PByteArray(@A);
+  PB := PByteArray(@B);
+  for I := 0 to Size - 1 do
+    if PA^[I] <> PB^[I] then
+    begin
+      MemEqu := False;
+      Exit;
+    end;
+end;
+{$ELSE}
 function MemEqu(var A,B; Size : Word) : Boolean; assembler;
 asm      push  ds
          cld
@@ -515,6 +572,7 @@ asm      push  ds
          dec   al
 @@EQ:    pop   ds
 end;
+{$ENDIF}
 
 procedure DelTBeg(b:byte);begin Delete(StrT,1,b) end;
 
@@ -852,6 +910,24 @@ begin
  FileTimeKnown:=On;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure CalcLnCRC(var Strng:string;var CRC:word);
+var
+  I: Integer;
+  V: Word;
+begin
+  if Length(Strng) = 0 then Exit;
+  V := CRC;
+  for I := 1 to Length(Strng) do
+  begin
+    V := (V shr 1) or ((V and 1) shl 15);
+    Inc(V, Byte(Strng[I]));
+  end;
+  V := (V shr 1) or ((V and 1) shl 15);
+  Inc(V, 10);
+  CRC := V;
+end;
+{$ELSE}
 procedure CalcLnCRC(var Strng:string;var CRC:word);assembler;
 asm
         cld
@@ -873,6 +949,7 @@ asm
         mov     word ptr es:[di],dx
  @@End: pop     ds
 end;
+{$ENDIF}
 
 
 procedure CheckSum;

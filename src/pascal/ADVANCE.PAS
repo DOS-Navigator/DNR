@@ -385,6 +385,14 @@ function QueryShiftState: Byte;
 function QueryExtendedShiftState: Byte;
 {$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Live replacement for `memw[$40:$1C] := memw[$40:$1A]` (BIOS
+  keyboard-buffer tail := head, i.e. discard queued type-ahead) -
+  discards any keystrokes the console has buffered but not yet
+  delivered. }
+procedure FlushKbdBuffer;
+{$ENDIF}
+
 IMPLEMENTATION
 
 {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
@@ -426,6 +434,13 @@ begin
   if GetKeyState(VK_CAPITAL) and $8000 <> 0 then S := S or $40;
   if GetKeyState(VK_INSERT) and $8000 <> 0 then S := S or $80;
   QueryExtendedShiftState := S;
+end;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure FlushKbdBuffer;
+begin
+  FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
 end;
 {$ENDIF}
 

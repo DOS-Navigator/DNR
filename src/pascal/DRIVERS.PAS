@@ -361,8 +361,15 @@ var
   EventQLast: record end;
   VESA_Found: ShortInt;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Ticks: Word absolute $40:$6C; dropped here - win32 rejects
+  `absolute segment:offset` at the parser level, not just in
+  codegen. The 3 asm sites that referenced Ticks as ES:Ticks are
+  ported separately. }
+{$ELSE}
 var
   Ticks: Word absolute $40:$6C;
+{$ENDIF}
 
 { Detect mouse driver }
 procedure DetectMouse; near; assembler;
@@ -629,7 +636,11 @@ procedure GetKeyEvent;
 begin
   _GetKeyEvent(Event);
   if Event.What = evNothing then Exit;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  if (Event.KeyCode = kbCtrlTab) and (QueryShiftState and 3 <> 0) then Event.KeyCode := kbAltTab;
+  {$ELSE}
   if (Event.KeyCode = kbCtrlTab) and (mem[$40:$17] and 3 <> 0) then Event.KeyCode := kbAltTab;
+  {$ENDIF}
   if (Event.CharCode = #$e0) and
      (Event.ScanCode in [$52,$92,$A2,
                          $47,$77,$97,

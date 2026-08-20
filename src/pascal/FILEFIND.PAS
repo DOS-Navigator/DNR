@@ -618,11 +618,19 @@ begin
   AddDirectory(FExpand(Dir));
   I := Dirs^.Count-1;
   MemReq := LowMemSize;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  while (I >= 0) and (not Abort) and (Memory.MemAvail > MemReq) do
+  {$ELSE}
   while (I >= 0) and (not Abort) and (System.MemAvail > MemReq) do
+  {$ENDIF}
     begin
       I := Dirs^.Count-1;
       {if Files^.Count >= 2000 then Break;}
+      {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+      while (I >= 0) and (not Abort) and (Memory.MemAvail > MemReq) do
+      {$ELSE}
       while (I >= 0) and (not Abort) and (System.MemAvail > MemReq) do
+      {$ENDIF}
         begin
           UpdateWriteView(PI);
           P := Dirs^.At(I);
@@ -644,7 +652,11 @@ begin
     end;
   PI^.Free;
   PDrv := New(PFindDrive, Init(GetString( dlBranch )+Dir, Dirs, Files));
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  PDrv^.NoMemory := Memory.MemAvail <= MemReq;
+  {$ELSE}
   PDrv^.NoMemory := System.MemAvail <= MemReq;
+  {$ENDIF}
   OpenDirectory := PDrv;
 end;
 

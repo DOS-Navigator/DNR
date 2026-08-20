@@ -992,3 +992,163 @@ that every Ofs() call in the file lives inside this one array.
 
 rtl-objpas is new this session - needed once SysUtils entered the
 picture via TDosStream's File* calls.
+
+# Session 10: UUCODE.PAS finished, chain reaches DRIVERS.PAS itself - 7 files touched
+
+## Headline
+
+Picked up mid-analysis of UUCODE.PAS's remaining LES/LDS sites (UUString,
+MemEqu) and drove the whole chain forward from there. UUCODE.PAS is now
+COMPLETE and compiles clean standalone for both i8086 and win32 - the
+file that opened this multi-session excavation is done. Continuing past
+it (compiling UUCODE.PAS pulls in its own further dependents) unblocked
+FVIEWER.PAS, MICROED.PAS, FILEFIND.PAS and FILECOPY.PAS in turn, and the
+chain finally reached **DRIVERS.PAS itself** - the original session-7/8
+target this whole excavation exists to unblock. Its own `GetKeyEvent`
+(one of the two functions this chain was launched to reach) now compiles
+past its BIOS-byte check; `GetMouseState`'s segment-register asm and a
+further BIOS-globals `var` block (Equipment/CrtRows/CrtInfo, feeding the
+screen manager) are the next two blockers, both real, substantial,
+scoped-but-not-yet-attempted work for a future session.
+
+## UUCODE.PAS finished: UUString, MemEqu, and FVIEWER.PAS's XlatBuf/MoveStr
+
+**UUString(var s; var CRC): Boolean** - the most intricate function
+ported this session. Decodes a UU-encoded line IN PLACE (each character
+of the string buffer overwritten with its own 6-bit value) while
+updating a running CRC with the same ROR-based algorithm already ported
+for CalcLnCRC. Traced instruction-by-instruction rather than guessed,
+because it has real, deliberate asymmetries that a "looks like the same
+pattern" port would have silently erased:
+- Zero-pads the buffer 70 bytes past the string's current content FIRST
+  (`rep stosb`, unconditional 70-byte write) - a pre-existing
+  theoretical buffer-overflow risk if ever called near the 255-char
+  ShortString ceiling, preserved as-is rather than "fixed", since real
+  UU-encoded lines are always ~61 chars max.
+- The FIRST character is validated against `'!'..'\`'` (rejects SPACE),
+  but every character AFTER it is validated against `' '..'\`'` (SPACE
+  is valid) - a genuine, deliberate protocol asymmetry in the original
+  (the first char encodes the line length), not a typo to "fix".
+- An embedded NUL mid-line ends the decode early without it being an
+  error - a leftover of the zero-padding from a shorter previous call
+  reusing the same buffer.
+- CRC is written back to the caller ONLY on success; every failure path
+  in the original asm jumps straight past the CRC-finalization block,
+  leaving the caller's CRC completely untouched. The port must NOT write
+  CRC on a failure branch even though a local running value was already
+  computed - matched exactly.
+
+**MemEqu(var A,B; Size): Boolean** - by contrast, a completely
+mechanical byte-by-byte comparison (`repe cmpsb`), zero hardware
+dependency, no subtlety at all.
+
+Reaching UUCODE.PAS's own dependents surfaced **FVIEWER.PAS's XlatBuf**
+(two identical declarations in two different scopes - a top-level unit
+procedure AND an inline copy nested inside `TFileViewer.Draw`'s local
+`SaveToFile` - both needed porting, not just one; the `cut_whole_proc`
+depth-tracker was generalized to find-and-process ALL occurrences by
+offset rather than assuming header uniqueness) and **MoveStr** (expands
+a ShortString into a video-cell Word buffer, attribute in the high byte,
+expanding TABs to the next 8-column stop and, depending on a `Flt`
+parameter, replacing characters with a specific CP866 byte - verified
+by reading the RAW byte directly with a byte-safe script rather than
+trusting the interactive Read tool's UTF-8 rendering of a mojibake'd
+character: the literal is `$FA` (CP866 middle-dot), not the `0xFF` a
+casual reading of the garbled glyph would have suggested).
+
+## Three more repeat-offender sites, one genuine new fix, one real bug
+
+- **MemAvail qualification, 2 more files** (MICROED.PAS, FILEFIND.PAS,
+  FILECOPY.PAS's MaxAvail too) - same fix as the 8+ System.MaxAvail
+  sites from prior sessions, just the MemAvail sibling this time.
+- **ShiftState reused again** (MICROED.PAS's BMarking, DRIVERS.PAS's own
+  GetKeyEvent - the function this whole chain exists to reach) -
+  `mem[0:$417]`/`mem[$40:$17] and 3` -> `QueryShiftState and 3`.
+- **A genuine new CP866-verified duplicate-set-element bug**:
+  FILECOPY.PAS's `CorrectFile` illegal-filename-char set literal
+  contained `'>'` TWICE (`[...,'>','/','\',':','>','<','|']`) - a real
+  1990s typo Turbo Pascal silently tolerated (duplicate set elements are
+  no-ops) but FPC's stricter set-constructor check rejects outright
+  ("range check error in set constructor or duplicate set element").
+  Fixed by removing the redundant second `'>'` - a behavior-preserving,
+  unguarded fix (no {$IFDEF} needed, since removing a no-op duplicate
+  changes nothing on any target), same family as the duplicate
+  case-label and doubled-unary-plus bugs from earlier sessions.
+- **memw[$40:$1C] := memw[$40:$1A] (2 sites, MICROED.PAS's PasteBlock)**
+  - BIOS keyboard-buffer tail := head, i.e. discard queued type-ahead
+  keystrokes after a paste. Unlike most BIOS-byte reads this session,
+  Win32 has a genuine, exact API equivalent
+  (`FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE))`) - a real
+  Tier-2 platform substitution, not a scaffold, added as
+  `FlushKbdBuffer` to ADVANCE.PAS alongside QueryShiftState.
+- **SetFileAttr/GetFileAttr (FILECOPY.PAS)** - real Win32 API
+  substitution, INT 21h AH=43h -> SetFileAttributesA/
+  GetFileAttributesA (kernel32, direct external declarations per the
+  established "never uses Windows" discipline). DOS attribute bits
+  (ReadOnly=1/Hidden=2/System=4/Directory=$10/Archive=$20) are
+  bit-identical to Win32's FILE_ATTRIBUTE_* constants, so Attr passes
+  straight through with no translation table needed. Added `Strings` to
+  the unit's implementation uses for StrPCopy - safe, since this
+  codebase's own conflicting `Strings` unit was renamed to `DnStrings`
+  long before this session.
+
+## Two mistakes this session made and caught itself
+
+- **stdcall ordering under -Mtp**: `external '...' name '...'; stdcall;`
+  (external clause before the calling-convention directive) fails with
+  "Procedure directive STDCALL cannot be used with EXTERNAL" - the
+  working order, confirmed against DISKINFO.PAS's own already-verified
+  declaration, is `stdcall; external '...' name '...';` (stdcall
+  FIRST). One line reordered per declaration, all three of
+  FILECOPY.PAS's new externals.
+- **Three sites this session applied a ShiftState/MemAvail fix WITHOUT
+  the required {$IFDEF} guard** (DRIVERS.PAS's Ticks `var` declaration
+  initially left a dangling empty `var` section under the win32 branch;
+  MICROED.PAS's BMarking shift-state check and FILEFIND.PAS's 3
+  MemAvail sites were both replaced unconditionally, breaking i8086
+  since QueryShiftState/Memory.MemAvail only exist under
+  `{$IFDEF FPC}{$IFNDEF CPUI8086}` in their home units). All three
+  caught by actually RUNNING the i8086 regression compile rather than
+  assuming success from the win32 compile alone - the win32-only compile
+  loop this session used for most of its length would never have caught
+  any of these, since the win32 branch was correct in every case; only
+  the discarded i8086 {$ELSE} branch was broken. Lesson: a guard fix
+  needs the SAME two-target verification as an asm port, not just
+  "the target I'm actively debugging now compiles."
+
+## A genuinely pre-existing i8086 wall, confirmed not a regression
+
+Compiling MICROED.PAS standalone for i8086 (`ppcross8086`, `-Wmlarge`)
+fails with `Fatal: Code segment too large` at MICROED.PAS(2254,29) - a
+real 16-bit code-segment size limit (64KB), unrelated to anything this
+session touched. Confirmed via `git stash` + a clean recompile against
+unmodified HEAD: the identical error, same line, on the untouched file.
+This means FVIEWER.PAS/MICROED.PAS/FILEFIND.PAS/FILECOPY.PAS/DRIVERS.PAS
+cannot currently get a full standalone i8086 "compiles clean" sweep
+result while MICROED.PAS sits in their transitive dependency chain -
+not a today regression, a pre-existing structural limit of compiling
+this particular oversized unit standalone via ppcross8086. ADVANCE.PAS
+and UUCODE.PAS - clear of MICROED.PAS in their own dependency chains -
+both DO compile clean standalone for i8086, confirming today's actual
+new port work (UUString/MemEqu/FlushKbdBuffer) is sound on that target.
+Splitting MICROED.PAS or otherwise working around the segment-size wall
+is out of scope for the DRIVERS.PAS chain and not attempted here.
+
+## What's left
+
+- **DRIVERS.PAS's GetMouseState** - a substantial segment-register
+  asm routine (`MOV ES,Seg0040; MOV DI,ES:Ticks`, event-queue draining
+  via `EventQHead`/`EventQTail`/`EventQueue`, `MouseWhere`/
+  `MouseButtons` state) - needs the same careful instruction-by-
+  instruction trace as UUString got, not a quick mechanical fix. Two
+  more `ES:Ticks` sites exist further down in DRIVERS.PAS beyond this
+  one (grep `\bTicks\b` in the file).
+- **DRIVERS.PAS's screen-manager BIOS globals** - `Equipment: Word
+  absolute $40:$10`, `CrtRows: Byte absolute $40:$84`, `CrtInfo: Byte
+  absolute $40:$87` - not yet scoped for usage sites; likely feeds
+  video-mode/screen-geometry detection in the SCREEN MANAGER section
+  that follows immediately after.
+- CDPLAYER.PAS's ~15 TCdPlayer action methods (unchanged from session 9,
+  still not picked up).
+- MICROED.PAS's pre-existing i8086 "Code segment too large" wall -
+  unresolved, out of scope for the DRIVERS.PAS chain specifically.

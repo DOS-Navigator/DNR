@@ -83,13 +83,25 @@ function CopyDialog( var CopyDir: PathStr; var Mask: Str12;
                      FromTemp: Byte; Owner: PView; Link: Boolean): Boolean;
 
 implementation
-uses DNApp, Startup, ExtraMemory, Memory, DnMessages, HistList, Commands,
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses Strings,
+     DNApp, Startup, ExtraMemory, Memory, DnMessages, HistList, Commands,
      DiskTool, xTime, Validate, 
     {$IFDEF MODEM}
      NavyLink, 
     {$ENDIF}
      Gauge, FileFind,
      DNUtil, RStrings, Tree, Archiver, Drives, DiskInfo;
+{$ELSE}
+uses
+     DNApp, Startup, ExtraMemory, Memory, DnMessages, HistList, Commands,
+     DiskTool, xTime, Validate, 
+    {$IFDEF MODEM}
+     NavyLink, 
+    {$ENDIF}
+     Gauge, FileFind,
+     DNUtil, RStrings, Tree, Archiver, Drives, DiskInfo;
+{$ENDIF}
 
 const
       cpmOverwrite = 0;
@@ -144,15 +156,29 @@ type
       end;
 
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MemAvail: LongInt;
+begin
+  MemAvail := MemAdjust(Memory.MemAvail);
+end;
+{$ELSE}
 function MemAvail: LongInt;
 begin
   MemAvail := MemAdjust(System.MemAvail);
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
 procedure GetFTimeSizeAttr(const A: string; var ATime, ASize: LongInt; AAttr: Word);
 var
@@ -164,6 +190,30 @@ begin
   AAttr := SR.Attr;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function WcSetFileAttributesA(lpFileName: PChar; dwFileAttributes: LongWord): LongBool; stdcall; external 'kernel32' name 'SetFileAttributesA';
+function WcGetFileAttributesA(lpFileName: PChar): LongWord; stdcall; external 'kernel32' name 'GetFileAttributesA';
+function WcGetLastError: LongWord; stdcall; external 'kernel32' name 'GetLastError';
+
+function SetFileAttr(const S: String; Attr: Word) : Word;
+var
+  Buf: array[0..255] of Char;
+begin
+  StrPCopy(Buf, S);
+  if WcSetFileAttributesA(Buf, Attr) then
+    SetFileAttr := 0
+  else
+    SetFileAttr := Word(WcGetLastError);
+end;
+
+function GetFileAttr(const S: String): Word;
+var
+  Buf: array[0..255] of Char;
+begin
+  StrPCopy(Buf, S);
+  GetFileAttr := Word(WcGetFileAttributesA(Buf));
+end;
+{$ELSE}
 function SetFileAttr(const S: String; Attr: Word) : Word; assembler;
 asm
   push ds
@@ -188,6 +238,7 @@ asm
   pop  ds
   mov  ax, cx
 end;
+{$ENDIF}
 
 
 function CorrectFile(const N: String): Boolean;
@@ -195,7 +246,7 @@ function CorrectFile(const N: String): Boolean;
 begin
    CorrectFile := Off;
    for I := 1 to Length(N) do
-       if N[I] in [#0..#31,'+','-','[',']','>','/','\',':','>','<','|'] then Exit;
+       if N[I] in [#0..#31,'+','-','[',']','>','/','\',':','<','|'] then Exit;
    CorrectFile := On;
 end;
 

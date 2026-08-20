@@ -333,7 +333,11 @@ begin
   GetKeyEvent(E); ESC_Pressed := (E.What = evKeyDown) and (E.KeyCode = kbEsc)
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MemAvail: LongInt; begin MemAvail := MemAdjust(Memory.MemAvail) end;
+{$ELSE}
 function MemAvail: LongInt; begin MemAvail := MemAdjust(System.MemAvail) end;
+{$ENDIF}
 
 
 constructor TEditSaver.Load(var S: TStream);
@@ -2329,7 +2333,11 @@ L1:
  procedure BMarking;
  begin
   if not EnableMarking then Exit;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  if (QueryShiftState and 3 <> 0) and not MouseMark then
+  {$ELSE}
   if (mem[0:$417] and 3 <> 0) and not MouseMark then
+  {$ENDIF}
   begin
    if not Marking then begin Sel.A := LastPos; Sel.B := Delta end
                   else Sel.B := Delta;
@@ -2372,7 +2380,11 @@ L1:
   BlockOff;
   InsertBlock(Clipboard, On);
   ChangeLine;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  FlushKbdBuffer;
+  {$ELSE}
   memw[$40:$1C] := memw[$40:$1A];
+  {$ENDIF}
   EnableMarking := On;
  end;
 
@@ -2714,7 +2726,11 @@ L1:
   InsertBlock(Clipboard, On);
 
   ChangeLine;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  FlushKbdBuffer;
+  {$ELSE}
   memw[$40:$1C] := memw[$40:$1A];
+  {$ENDIF}
   EnableMarking := On;
  end;
 
