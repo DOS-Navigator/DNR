@@ -286,6 +286,27 @@ var f:file;begin Assign(f,FName);Erase(f) end;
 procedure RenameFile(const Name1,Name2:PathStr);
 var f:file; begin Assign(f,Name1);Rename(f,Name2) end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function GetASCIIZ(var Buf):PathStr;
+var
+  PB, PR: PByteArray;
+  S: PathStr;
+  Cnt, Idx: Byte;
+begin
+  PR := PByteArray(@S);
+  PB := PByteArray(@Buf);
+  Cnt := 0;
+  Idx := 0;
+  while PB^[Idx] <> 0 do
+  begin
+    PR^[Cnt] := PB^[Idx];
+    Inc(Cnt);
+    Inc(Idx);
+  end;
+  PR^[0] := Cnt;
+  GetASCIIZ := S;
+end;
+{$ELSE}
 function GetASCIIZ(var Buf):PathStr;assembler;
 asm
         push    ds
@@ -302,6 +323,7 @@ asm
         mov     es:[di],ah
         pop     ds
 end;
+{$ENDIF}
 
 procedure PrepareWrite;
 begin OutBufPos:=65535;GetMem(POutBuf,OutBufSize) end;
@@ -396,6 +418,24 @@ begin
  Inc(Index);
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure CalcBufCRC(var Buf;Size:word;var PrevSum:word);
+var
+  P: PByteArray;
+  I: Word;
+  V: Word;
+begin
+  if Size = 0 then Exit;
+  P := PByteArray(@Buf);
+  V := PrevSum;
+  for I := 0 to Size - 1 do
+  begin
+    V := (V shr 1) or ((V and 1) shl 15);
+    Inc(V, P^[I]);
+  end;
+  PrevSum := V;
+end;
+{$ELSE}
 procedure CalcBufCRC(var Buf;Size:word;var PrevSum:word);assembler;
 asm
         mov     cx,Size
@@ -413,6 +453,7 @@ asm
         mov     word ptr es:[di],dx
  @@End:
 end;
+{$ENDIF}
 
 function SmartDIV(L:LongInt;W:Word):Word;assembler;
 asm      mov     ax,word ptr [L+0]
@@ -1742,6 +1783,13 @@ begin
  EncSize:=Kb2(LongMul((OutBufSize-SectNZ),NumSect+1));
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function GetDecimal(Number:word):string; {Set 2-b}
+begin
+  GetDecimal := Chr(Byte(Number div 10) + Ord('0')) +
+                Chr(Byte(Number mod 10) + Ord('0'));
+end;
+{$ELSE}
 function GetDecimal(Number:word):string;assembler; {Set 2-b}
 asm
         cld
@@ -1754,6 +1802,7 @@ asm
         add     ax,3030h
         stosw
 end;
+{$ENDIF}
 
 function GetMonth(Month:word):string;
 begin

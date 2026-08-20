@@ -302,6 +302,17 @@ procedure MoveStr(var Dest; const Str: String; Attr: Byte);
 function CStrLen(const S: String): Integer;
 
 implementation
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses
+  Windows,
+  Dos,
+  Advance,
+  Commands,
+  Views,
+  Startup,
+  DnApp,
+  FlPanelX;
+{$ELSE}
 uses
   Dos,
   Advance,
@@ -310,6 +321,7 @@ uses
   Startup,
   DnApp,
   FlPanelX;
+{$ENDIF}
 
 const
       MCurMP    : CharDef=($00,$40,$60,$30,$18,$3C,$3E,$3E,$3E,$1F,$07,$06,$00,$00,$00,$00);
@@ -372,6 +384,16 @@ var
 {$ENDIF}
 
 { Detect mouse driver }
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure DetectMouse;
+begin
+  { No mouse driver detection on win32 - a console mouse is
+    enabled, not probed for. Real support is deferred (see
+    TOOLCHAIN.md session 10); this correctly runs DN keyboard-only
+    in the meantime, matching a real supported DOS configuration. }
+  ButtonCount := 0;
+end;
+{$ELSE}
 procedure DetectMouse; near; assembler;
 asm
         MOV     AX,3533H
@@ -396,6 +418,7 @@ asm
         JNE     @@3
 @@1:    MOV     ButtonCount,AL
 end;
+{$ENDIF}
 
 {procedure InitMouse;
 begin
@@ -424,6 +447,14 @@ end;
 {       DX = Y coordinate }
 {       DI = Timer ticks }
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure GetMouseState;
+begin
+  { Unreachable on win32: GetMouseEvent below never calls this -
+    mouse input is deferred, see DetectMouse. Kept only so the
+    unit compiles; real mouse support replaces this. }
+end;
+{$ELSE}
 procedure GetMouseState; near; assembler;
 asm
         CLI
@@ -461,6 +492,7 @@ asm
         XOR     BL,3
 @@4:
 end;
+{$ENDIF}
 
 procedure ShowMouse; assembler;
 asm
@@ -534,6 +566,17 @@ asm
 @@1:
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure GetMouseEvent(var Event: TEvent);
+begin
+  { Mouse input deferred (MouseEvents is always False here - see
+    DetectMouse's win32 scaffold above). Real Win32 Console API
+    mouse support (ENABLE_MOUSE_INPUT + MOUSE_EVENT_RECORD) is the
+    natural next piece after keyboard's own real port - see
+    TOOLCHAIN.md session 10. }
+  Event.What := evNothing;
+end;
+{$ELSE}
 procedure GetMouseEvent(var Event: TEvent); assembler;
 asm
         CMP     MouseEvents,0
@@ -599,7 +642,33 @@ asm
         MOV     LastWhere.Y,DX
 @@9:    CALL    StoreEvent
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure _GetKeyEvent(var Event: TEvent);
+var
+  Rec: TInputRecord;
+  NumWaiting, NumRead: LongWord;
+  Ok: LongBool;
+  H: THandle;
+begin
+  Event.What := evNothing;
+  Event.KeyCode := 0;
+  H := GetStdHandle(STD_INPUT_HANDLE);
+  while True do
+  begin
+    Ok := GetNumberOfConsoleInputEvents(H, NumWaiting);
+    if (not Ok) or (NumWaiting = 0) then Exit;
+    Ok := ReadConsoleInputA(H, Rec, 1, NumRead);
+    if (not Ok) or (NumRead = 0) then Exit;
+    if (Rec.EventType <> KEY_EVENT) or (not Rec.Event.KeyEvent.bKeyDown) then Continue;
+    Event.What := evKeyDown;
+    Event.KeyCode := (Word(Rec.Event.KeyEvent.wVirtualScanCode) shl 8)
+                      or Byte(Rec.Event.KeyEvent.AsciiChar);
+    Exit;
+  end;
+end;
+{$ELSE}
 procedure _GetKeyEvent(var Event: TEvent); assembler;
 asm
         MOV     AH,11h
@@ -630,6 +699,7 @@ asm
         MOV     DX,CX
         CALL    StoreEvent
 end;
+{$ENDIF}
 
 
 procedure GetKeyEvent;
@@ -669,10 +739,18 @@ end;}
 
 { ******** SCREEN MANAGER ******** }
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Equipment: Word absolute $40:$10; CrtInfo: Byte absolute $40:$87;
+  dropped here (win32 rejects `absolute segment:offset` at the
+  parser level) - both used only inside SetCrtMode, scaffolded
+  below. CrtRows: Byte absolute $40:$84; is unused anywhere in
+  this file and simply dropped. }
+{$ELSE}
 var
   Equipment: Word absolute $40:$10;
   CrtRows: Byte absolute $40:$84;
   CrtInfo: Byte absolute $40:$87;
+{$ENDIF}
 
 { Save registers and call video interrupt }
 
@@ -825,6 +903,16 @@ asm
 end;
 { Set CRT mode to value in AX }
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure SetCrtMode;
+begin
+  { Screen Manager / video-mode BIOS+VGA-register programming -
+    out of scope for this pass (Input). Real Win32 port is the
+    Console Screen Buffer API, not INT10h - see TOOLCHAIN.md
+    session 10. Callers (InitVideo/ClearScreen) have their own
+    unrelated BIOS-byte issues still to resolve regardless. }
+end;
+{$ELSE}
 procedure SetCrtMode; near; assembler;
 asm
         MOV     ES,Seg0040
@@ -868,6 +956,7 @@ asm
         CALL    VideoInt
 @@2:
 end;
+{$ENDIF}
 
 { Fix CRT mode in AX if required }
 
@@ -2913,6 +3002,12 @@ begin
 {$ELSE}
   CharHeight := Mem[$40:$85];
 {$ENDIF}{$ENDIF}
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  { Ctrl+C as an ordinary keystroke, not a termination signal;
+    QuickEdit off so a future mouse click is not a text-selection
+    drag. Mouse input stays off until GetMouseEvent is real too. }
+  SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_EXTENDED_FLAGS);
+{$ENDIF}
   SaveExit := ExitProc;
   ExitProc := @ExitDrivers;
 end.
