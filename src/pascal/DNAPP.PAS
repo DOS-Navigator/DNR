@@ -1143,6 +1143,36 @@ begin
   Halt(0);
 end;
 
+{$I embedded_resources.inc}
+
+function CreateEmbeddedStream(PData: Pointer; DataSize: LongInt): PStream;
+var
+  M: PMemoryStream;
+begin
+  M := New(PMemoryStream, Init(DataSize, 4096));
+  if (M <> nil) and (M^.Status = stOK) and (DataSize > 0) and (PData <> nil) then
+  begin
+    Move(PData^, M^.Buffer^, DataSize);
+    M^.Seek(0);
+  end;
+  CreateEmbeddedStream := M;
+end;
+
+function GetEmbeddedDlgStream: PStream;
+begin
+  if LngId = 'RUS' then
+    GetEmbeddedDlgStream := CreateEmbeddedStream(@Embedded_DNRUSDLG, Embedded_DNRUSDLG_Size)
+  else
+    GetEmbeddedDlgStream := CreateEmbeddedStream(@Embedded_DNDLG, Embedded_DNDLG_Size);
+end;
+
+function GetEmbeddedLngStream: PStream;
+begin
+  if LngId = 'RUS' then
+    GetEmbeddedLngStream := CreateEmbeddedStream(@Embedded_DNRUSLNG, Embedded_DNRUSLNG_Size)
+  else
+    GetEmbeddedLngStream := CreateEmbeddedStream(@Embedded_DNLNG, Embedded_DNLNG_Size);
+end;
 
 procedure OpenResource;
  var S: String;
@@ -1156,7 +1186,12 @@ begin
      Dispose(ResourceStream, Done);
      ResourceStream := New(PBufStream, Init(StartupDir + 'DN' + LngId + '.DLG', stOpenRead, 1024));
    end;
- if ResourceStream^.Status <> stOK then ResourceFail;
+ if ResourceStream^.Status <> stOK then
+   begin
+     Dispose(ResourceStream, Done);
+     ResourceStream := GetEmbeddedDlgStream;
+   end;
+ if (ResourceStream = nil) or (ResourceStream^.Status <> stOK) then ResourceFail;
  New(Resource, Init(ResourceStream));
 end;
 
@@ -1322,7 +1357,12 @@ begin
        Dispose(PS, Done);
        PS := New(PBufStream, Init(StartupDir + 'dn' + LngId + '.lng', stOpenRead, 4096));
      end;
-   if PS^.Status <> stOK then ResourceFail;
+   if PS^.Status <> stOK then
+     begin
+       Dispose(PS, Done);
+       PS := GetEmbeddedLngStream;
+     end;
+   if (PS = nil) or (PS^.Status <> stOK) then ResourceFail;
 
    XS := nil;
    if XMSFound then

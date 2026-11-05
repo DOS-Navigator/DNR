@@ -89,7 +89,7 @@ const
 function MaxAvail: LongInt;
 begin
   { Memory.MaxAvail, not System's (win32 has neither) }
-  MaxAvail := {$IFDEF DN}MemAdjust{$ENDIF}(Memory.MaxAvail);
+  MaxAvail := {$IFDEF DN}MemAdjust(Memory.MaxAvail){$ELSE}655360{$ENDIF};
 end;
 {$ELSE}
 function MaxAvail: LongInt;

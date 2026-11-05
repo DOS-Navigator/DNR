@@ -30,7 +30,7 @@ from surfacekit import (TuiSurface, Control, Outcome, emit, negative, ok, unknow
                         harvest_dropdown, menubar, EXIT_OK, EXIT_USAGE, EXIT_UNKNOWN)
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-BINARY = str(ROOT_DIR / 'build' / 'dn.exe')
+BINARY = os.environ.get('DN_EXE') or str(ROOT_DIR / 'build' / 'dn.exe')
 ARGS = []
 LANDMARK = 'F1 Help  F2 User  F3 View  F4 Edit  F5 Copy  F6 Ren  F7 MkDir  F8 Del  F10 Menu'
 STATUS_LINE_AT_START = 'F1 Help  F2 User  F3 View  F4 Edit  F5 Copy  F6 Ren  F7 MkDir  F8 Del  F10 Menu'

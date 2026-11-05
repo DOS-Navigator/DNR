@@ -53,6 +53,9 @@ jobs:
         run: |
           Get-Item build\dn.exe | Select-Object Name, Length, LastWriteTime
           cmd.exe /c "build\dn.exe /? 2>&1"
+          New-Item -ItemType Directory -Path "$env:TEMP\isolated_test" -Force
+          Copy-Item build\dn.exe "$env:TEMP\isolated_test\dn.exe"
+          cmd.exe /c "cd /d $env:TEMP\isolated_test && dn.exe /? 2>&1"
 
       - name: Package Monolithic Binary and Archive
         run: |
@@ -76,7 +79,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
-          Write-Host "Creating GitHub Release for tag: $tag"
-          gh release create $tag "dist\dn.exe" "dist\dn-win32-x86.zip" `
-            --title "DOS Navigator $tag (Native Win32)" `
-            --generate-notes
+          Write-Host "Publishing GitHub Release for tag: $tag"
+          gh release view $tag >$null 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag exists, uploading assets with clobber..."
+            gh release upload $tag "dist\dn.exe" "dist\dn-win32-x86.zip" --clobber
+          } else {
+            Write-Host "Creating new release $tag..."
+            gh release create $tag "dist\dn.exe" "dist\dn-win32-x86.zip" `
+              --title "DOS Navigator $tag (Native Win32)" `
+              --generate-notes
+          }
