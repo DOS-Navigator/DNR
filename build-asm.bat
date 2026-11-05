@@ -25,12 +25,18 @@ if /I "%~1"=="clean" (
     exit /b 0
 )
 
-if not defined T2NT set "T2NT=t2nt.exe"
-where "%T2NT%" >nul 2>&1 || if not exist "%T2NT%" (
+set "T2NT_PATH="
+if defined T2NT if exist "%T2NT%" set "T2NT_PATH=%T2NT%"
+if not defined T2NT_PATH if exist "%ROOT%..\T2NT\bin\t2nt.exe" set "T2NT_PATH=%ROOT%..\T2NT\bin\t2nt.exe"
+if not defined T2NT_PATH (
+    where t2nt.exe >nul 2>&1 && set "T2NT_PATH=t2nt.exe"
+)
+if not defined T2NT_PATH (
     echo ERROR: t2nt not found. Set T2NT to the built t2nt.exe, or put it on PATH.
     echo        See https://github.com/DOS-Navigator/T2NT
     exit /b 1
 )
+set "T2NT=%T2NT_PATH%"
 
 where nasm >nul 2>&1
 if errorlevel 1 (

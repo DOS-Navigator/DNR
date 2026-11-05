@@ -525,7 +525,8 @@ var
 begin
   GetData( Data );
   inherited Done;
-  Dispose( Data.Drives.List, Done );
+  if Data.Drives.List <> nil then
+    Dispose( Data.Drives.List, Done );
 end;
 
 PROCEDURE TSysDialog.GetData;

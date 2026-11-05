@@ -63,6 +63,8 @@ var
 
 
 procedure SliceAwake;
+procedure FlushScreenBuffer;
+procedure SliceYield;
 
 { ******** EVENT MANAGER ******** }
 
@@ -302,6 +304,7 @@ procedure MoveStr(var Dest; const Str: String; Attr: Byte);
 function CStrLen(const S: String): Integer;
 
 implementation
+
 {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
 uses
   Windows,
@@ -322,6 +325,23 @@ uses
   DnApp,
   FlPanelX;
 {$ENDIF}
+
+{$IFNDEF CPUI8086}
+const
+  Seg0040 = $0040;
+  PrefixSeg: Word = 0;
+  HeapOrg: Pointer = nil;
+  HeapEnd: Pointer = nil;
+  HeapPtr: Pointer = nil;
+  StackLimit: Word = 0;
+  ConsoleInputHandle: THandle = 0;
+  ConsoleOutputHandle: THandle = 0;
+
+function MemAvail: LongInt; begin MemAvail := $7FFFFFFF; end;
+function MaxAvail: LongInt; begin MaxAvail := $7FFFFFFF; end;
+{$ENDIF}
+
+
 
 const
       MCurMP    : CharDef=($00,$40,$60,$30,$18,$3C,$3E,$3E,$3E,$1F,$07,$06,$00,$00,$00,$00);
@@ -429,6 +449,8 @@ end;}
 
 procedure StoreEvent; near; assembler;
 asm
+{$IFDEF CPUI8086}
+
         MOV     DI,SP
         LES     DI,SS:[DI+8]
         CLD
@@ -439,6 +461,10 @@ asm
         STOSW
         XCHG    AX,DX
         STOSW
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
 
 { Get mouse state }
@@ -644,32 +670,9 @@ asm
 end;
 {$ENDIF}
 
-{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
 procedure _GetKeyEvent(var Event: TEvent);
-var
-  Rec: TInputRecord;
-  NumWaiting, NumRead: LongWord;
-  Ok: LongBool;
-  H: THandle;
-begin
-  Event.What := evNothing;
-  Event.KeyCode := 0;
-  H := GetStdHandle(STD_INPUT_HANDLE);
-  while True do
-  begin
-    Ok := GetNumberOfConsoleInputEvents(H, NumWaiting);
-    if (not Ok) or (NumWaiting = 0) then Exit;
-    Ok := ReadConsoleInputA(H, Rec, 1, NumRead);
-    if (not Ok) or (NumRead = 0) then Exit;
-    if (Rec.EventType <> KEY_EVENT) or (not Rec.Event.KeyEvent.bKeyDown) then Continue;
-    Event.What := evKeyDown;
-    Event.KeyCode := (Word(Rec.Event.KeyEvent.wVirtualScanCode) shl 8)
-                      or Byte(Rec.Event.KeyEvent.AsciiChar);
-    Exit;
-  end;
-end;
-{$ELSE}
-procedure _GetKeyEvent(var Event: TEvent); assembler;
+{$IFDEF CPUI8086}
+assembler;
 asm
         MOV     AH,11h
         INT     16H
@@ -699,17 +702,151 @@ asm
         MOV     DX,CX
         CALL    StoreEvent
 end;
+{$ELSE}
+var
+  Rec: TInputRecord;
+  NumWaiting, NumRead: LongWord;
+  Ok: LongBool;
+  H: THandle;
+  VK, Scan: Word;
+  Ch: Char;
+  CtrlState: LongWord;
+  IsAlt, IsCtrl, IsShift: Boolean;
+begin
+  Event.What := evNothing;
+  Event.KeyCode := 0;
+  if (ConsoleInputHandle = 0) or (ConsoleInputHandle = INVALID_HANDLE_VALUE) then
+  begin
+    H := GetStdHandle(STD_INPUT_HANDLE);
+    if not GetConsoleMode(H, NumWaiting) then
+      H := CreateFileA('CONIN$', GENERIC_READ or GENERIC_WRITE,
+        FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_EXISTING, 0, 0);
+    ConsoleInputHandle := H;
+  end;
+  H := ConsoleInputHandle;
+  if (H = 0) or (H = INVALID_HANDLE_VALUE) then Exit;
+  while True do
+  begin
+    Ok := GetNumberOfConsoleInputEvents(H, NumWaiting);
+    if (not Ok) or (NumWaiting = 0) then Exit;
+    Ok := ReadConsoleInputA(H, Rec, 1, NumRead);
+    if (not Ok) or (NumRead = 0) then Exit;
+    if (Rec.EventType <> KEY_EVENT) or (not Rec.Event.KeyEvent.bKeyDown) then Continue;
+
+    VK := Rec.Event.KeyEvent.wVirtualKeyCode;
+    Scan := Rec.Event.KeyEvent.wVirtualScanCode;
+    Ch := Rec.Event.KeyEvent.AsciiChar;
+    CtrlState := Rec.Event.KeyEvent.dwControlKeyState;
+
+    { Skip modifier keys alone }
+    if (VK = $10) or (VK = $11) or (VK = $12) or
+       (VK = $14) or (VK = $90) or (VK = $91) then Continue;
+
+    IsAlt := (CtrlState and ($0001 or $0002)) <> 0;
+    IsCtrl := (CtrlState and ($0004 or $0008)) <> 0;
+    IsShift := (CtrlState and $0010) <> 0;
+
+    if IsAlt then
+    begin
+      if (VK >= $70) and (VK <= $79) then
+        Event.KeyCode := ($68 + (VK - $70)) shl 8
+      else if VK = $7A then Event.KeyCode := $8B00
+      else if VK = $7B then Event.KeyCode := $8C00
+      else if (VK >= Ord('1')) and (VK <= Ord('9')) then
+        Event.KeyCode := ($78 + (VK - Ord('1'))) shl 8
+      else if (VK = Ord('0')) or (VK = $30) then Event.KeyCode := $8100
+      else if VK = $BD then Event.KeyCode := $8200
+      else if VK = $BB then Event.KeyCode := $8300
+      else if VK = $08 then Event.KeyCode := $0E00
+      else if VK = $0D then Event.KeyCode := $1C00
+      else if VK = $09 then Event.KeyCode := $A500
+      else if VK = $20 then Event.KeyCode := $C200
+      else if VK = $1B then Event.KeyCode := $011B
+      else
+        Event.KeyCode := Scan shl 8;
+    end
+    else if IsCtrl then
+    begin
+      if (VK >= $70) and (VK <= $79) then
+        Event.KeyCode := ($5E + (VK - $70)) shl 8
+      else if VK = $7A then Event.KeyCode := $8900
+      else if VK = $7B then Event.KeyCode := $8A00
+      else if VK = $09 then Event.KeyCode := $9400
+      else if VK = $0D then Event.KeyCode := $1C0A
+      else if VK = $08 then Event.KeyCode := $0E7F
+      else if VK = $25 then Event.KeyCode := $7300
+      else if VK = $27 then Event.KeyCode := $7400
+      else if VK = $26 then Event.KeyCode := $8D00
+      else if VK = $28 then Event.KeyCode := $9100
+      else if VK = $24 then Event.KeyCode := $7700
+      else if VK = $23 then Event.KeyCode := $7500
+      else if VK = $21 then Event.KeyCode := $8400
+      else if VK = $22 then Event.KeyCode := $7600
+      else if VK = $2D then Event.KeyCode := $9200
+      else if VK = $2E then Event.KeyCode := $9300
+      else if (VK >= Ord('A')) and (VK <= Ord('Z')) then
+        Event.KeyCode := (Scan shl 8) or (VK - Ord('A') + 1)
+      else if Ch <> #0 then
+        Event.KeyCode := (Scan shl 8) or Byte(Ch)
+      else
+        Event.KeyCode := Scan shl 8;
+    end
+    else if IsShift then
+    begin
+      if (VK >= $70) and (VK <= $79) then
+        Event.KeyCode := ($54 + (VK - $70)) shl 8
+      else if VK = $7A then Event.KeyCode := $8700
+      else if VK = $7B then Event.KeyCode := $8800
+      else if VK = $09 then Event.KeyCode := $0F00
+      else if VK = $2D then Event.KeyCode := $C300
+      else if VK = $2E then Event.KeyCode := $C400
+      else if Ch <> #0 then
+        Event.KeyCode := (Scan shl 8) or Byte(Ch)
+      else
+        Event.KeyCode := Scan shl 8;
+    end
+    else
+    begin
+      if (VK >= $70) and (VK <= $79) then
+        Event.KeyCode := ($3B + (VK - $70)) shl 8
+      else if VK = $7A then Event.KeyCode := $8500
+      else if VK = $7B then Event.KeyCode := $8600
+      else if VK = $26 then Event.KeyCode := $4800
+      else if VK = $28 then Event.KeyCode := $5000
+      else if VK = $25 then Event.KeyCode := $4B00
+      else if VK = $27 then Event.KeyCode := $4D00
+      else if VK = $24 then Event.KeyCode := $4700
+      else if VK = $23 then Event.KeyCode := $4F00
+      else if VK = $21 then Event.KeyCode := $4900
+      else if VK = $22 then Event.KeyCode := $5100
+      else if VK = $2D then Event.KeyCode := $5200
+      else if VK = $2E then Event.KeyCode := $5300
+      else if VK = $1B then Event.KeyCode := $011B
+      else if VK = $0D then Event.KeyCode := $1C0D
+      else if VK = $09 then Event.KeyCode := $0F09
+      else if VK = $08 then Event.KeyCode := $0E08
+      else if Ch <> #0 then
+        Event.KeyCode := (Scan shl 8) or Byte(Ch)
+      else
+        Event.KeyCode := Scan shl 8;
+    end;
+
+    Event.What := evKeyDown;
+    Exit;
+  end;
+end;
 {$ENDIF}
 
 
 procedure GetKeyEvent;
 begin
+  FlushScreenBuffer;
   _GetKeyEvent(Event);
   if Event.What = evNothing then Exit;
   {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
   if (Event.KeyCode = kbCtrlTab) and (QueryShiftState and 3 <> 0) then Event.KeyCode := kbAltTab;
   {$ELSE}
-  if (Event.KeyCode = kbCtrlTab) and (mem[$40:$17] and 3 <> 0) then Event.KeyCode := kbAltTab;
+  if (Event.KeyCode = kbCtrlTab) and (0 and 3 <> 0) then Event.KeyCode := kbAltTab;
   {$ENDIF}
   if (Event.CharCode = #$e0) and
      (Event.ScanCode in [$52,$92,$A2,
@@ -966,6 +1103,8 @@ procedure FixXGAmode; near;
 begin
   P := @R;
   asm
+{$IFDEF CPUI8086}
+
      mov  ax, $4E04
      xor  bx, bx
      push bp
@@ -978,7 +1117,11 @@ begin
      push bp
      int  10h
      pop  bp
-  end;
+  
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
   if  R[$0C] <> 0 then
     asm
       mov  AX, smCO80
@@ -993,6 +1136,8 @@ procedure FixSVGAMode; near;
 begin
   P := @R;
   asm
+{$IFDEF CPUI8086}
+
      mov  ax, $4F03
      push bp
      int  10h
@@ -1003,7 +1148,11 @@ begin
      push bp
      int  10h
      pop  bp
-  end;
+  
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
   if R[0] and $10 <> 0 then
     asm
       mov  AX, smCO80
@@ -1029,7 +1178,9 @@ end;
 
 { Set CRT data areas and mouse range }
 
-procedure SetCrtData; near; assembler;
+procedure SetCrtData; near;
+{$IFDEF CPUI8086}
+assembler;
 asm
         CALL    GetCrtMode
         MOV     CL,1
@@ -1045,11 +1196,11 @@ asm
         MOV     byte ptr ScreenHeight + 1, 0
         MOV     HiResScreen,CL
         XOR     CL,1
-        MOV     BX,SegB800
+        MOV     BX,$B800
         CMP     AL,smMono
         JNE     @@2
         MOV     CL,0
-        MOV     BX,SegB000
+        MOV     BX,$B000
 @@2:    MOV     CheckSnow,CL
         XOR     AX,AX
         MOV     ScreenBuffer.Word[0],AX
@@ -1101,6 +1252,21 @@ asm
         INT     33H
 @@4:
 end;
+{$ELSE}
+begin
+  ScreenMode := smCO80;
+  ScreenWidth := 80;
+  ScreenHeight := 25;
+  HiResScreen := True;
+  CheckSnow := False;
+  CursorLines := $0607;
+  if ScreenBuffer = nil then
+  begin
+    GetMem(ScreenBuffer, ScreenWidth * ScreenHeight * 2);
+    FillWord(ScreenBuffer^, ScreenWidth * ScreenHeight, $0720);
+  end;
+end;
+{$ENDIF}
 
 { Detect video modes
 
@@ -1122,17 +1288,29 @@ begin
   if VESA_Found <> -1 then Exit;
   P := @R; R.ID := 'QQQQ';
   asm
+{$IFDEF CPUI8086}
+
     mov ax, $4E00
     les di, P
     int 10h
-  end;
+  
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
   if R.Id = 'VESA' then VESA_Found := 1
    else begin
          asm
+{$IFDEF CPUI8086}
+
            mov ax, $4F00
            les di, P
            int 10h
-         end;
+         
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
          if R.Id = 'VESA' then VESA_Found := 2 else VESA_Found := 0;
         end;
 end;
@@ -1141,6 +1319,7 @@ end;
 
 procedure InitVideo;
 begin
+{$IFDEF CPUI8086}
     asm
       CMP       ScreenSaved, 0
       JNZ       @@2
@@ -1176,11 +1355,18 @@ begin
 @@1:  CALL      SetCrtData
     end;
    if WordRec(CursorLines).Hi > $10 then CursorLines := $607;
+{$ELSE}
+  if Windows.GetConsoleWindow = 0 then
+    Windows.AllocConsole;
+  Windows.SetConsoleOutputCP(866);
+  Windows.SetConsoleCP(866);
+  SetCrtData;
+{$ENDIF}
    if not ScreenSaved then
     begin
      if UserScreen <> nil then FreeMem(UserScreen, UserScreenSize);
      UserScreenSize := {memw[$40:$4C];} ScreenWidth * ScreenHeight * 2;
-     UserScreenWidth := memw[$40:$4A];
+     UserScreenWidth := ScreenWidth;
      GetMem(UserScreen, UserScreenSize);
      Move(ScreenBuffer^, UserScreen^, UserScreenSize);
      ScreenSaved := True;
@@ -1192,11 +1378,15 @@ begin
 end;
 
 procedure DoneVideo;
+{$IFDEF CPUI8086}
 var
   I, J, H: Integer;
   Shift: Integer;
-  procedure FillEStr( X, Y: Integer ); assembler;
+{$IFDEF CPUI8086}
+procedure FillEStr( X, Y: Integer ); assembler;
   asm
+{$IFDEF CPUI8086}
+
     mov  cx,ScreenWidth
     sub  cx,X
     les  di,ScreenBuffer
@@ -1209,7 +1399,25 @@ var
     mov  ax,0720h
     cld
     rep  stosw
+  
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
+{$ELSE}
+  procedure FillEStr( X, Y: Integer );
+  var
+    I, Offset, Count: Integer;
+    Buf: PWordArray;
+  begin
+    Buf := PWordArray(ScreenBuffer);
+    if Buf = nil then Exit;
+    Count := ScreenWidth - X;
+    Offset := Y * ScreenWidth + X;
+    for I := 0 to Count - 1 do
+      Buf^[Offset + I] := $0720;
   end;
+{$ENDIF}
 begin
   if (ScreenSaved) and (UserScreen <> nil) then begin
     J := UserScreenWidth; if J > ScreenWidth then J := ScreenWidth;
@@ -1252,6 +1460,16 @@ begin
   end;
 end;
 
+{$ELSE}
+begin
+  if ScreenBuffer <> nil then
+  begin
+    FreeMem(ScreenBuffer, ScreenWidth * ScreenHeight * 2);
+    ScreenBuffer := nil;
+  end;
+end;
+{$ENDIF}
+
 const ModeChanged: Boolean = False;
 
 procedure SetXGAMode; near;
@@ -1262,6 +1480,8 @@ begin
   asm mov  M, ax end;
   P := @R;
   asm
+{$IFDEF CPUI8086}
+
     mov  cx, M
     mov  ax, $4E02
     les  di, P
@@ -1269,7 +1489,11 @@ begin
     push bp
     int  10h
     pop  bp
-  end;
+  
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
   if R[$0C] <> 0 then Exit;
   ModeChanged := True;
   asm
@@ -1291,13 +1515,19 @@ begin
   asm mov  M, ax end;
   P := @R;
   asm
+{$IFDEF CPUI8086}
+
     mov  cx, M
     mov  ax, $4F01
     les  di, P
     push bp
     int  10h
     pop  bp
-  end;
+  
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
   if R[0] and $11 <> 1 then Exit;
   ModeChanged := True;
   asm
@@ -1313,6 +1543,7 @@ end;
 
 procedure SetVideoMode(Mode: Word);
 begin
+{$IFDEF CPUI8086}
 asm
         MOV     AX,Mode
         CMP     AX,$100
@@ -1361,9 +1592,15 @@ end;
         if not isSame( VGA_Default, VGA_Palette, SizeOf(VGA_Palette)) then
            SetPalette(VGA_palette);
       }
+
+{$ELSE}
+  SetCrtData;
+{$ENDIF}
 end;
 
-procedure ClearScreen; assembler;
+procedure ClearScreen;
+{$IFDEF CPUI8086}
+assembler;
 asm
         MOV     AX,600H
         MOV     BH,07H
@@ -1378,9 +1615,17 @@ asm
         XOR     DX,DX
         CALL    VideoInt
 end;
+{$ELSE}
+begin
+  if ScreenBuffer <> nil then
+    FillWord(ScreenBuffer^, ScreenWidth * ScreenHeight, $0720);
+end;
+{$ENDIF}
 
 
-     Function VGASystem: Boolean; assembler ;
+     Function VGASystem: Boolean;
+{$IFDEF CPUI8086}
+assembler ;
       asm
         mov ax,1C00h
         mov cx,7
@@ -1397,8 +1642,14 @@ end;
 @@1:    mov ax,1
 @@2:
      end;
+{$ELSE}
+begin
+  VGASystem := True;
+end;
+{$ENDIF}
 
    Procedure InitVGApalette ;
+{$IFDEF CPUI8086}
      Var
        regs : Registers;
        idx  : Byte;
@@ -1418,6 +1669,10 @@ end;
          end;
        end;
      end;
+{$ELSE}
+begin
+end;
+{$ENDIF}
 
      Procedure Set_palette(slot:Word; sred,sgreen,sblue : Byte);
      Var
@@ -1481,10 +1736,12 @@ end;
 
 { ******** SYSTEM ERROR HANDLER ******** }
 
+{$IFDEF CPUI8086}
 {$IFDEF DPMI}
 {$L SYSINT.OBP}
 {$ELSE}
 {$L SYSINT.OBJ}
+{$ENDIF}
 {$ENDIF}
 
 const
@@ -1577,12 +1834,19 @@ var
 
 { System error handler routines }
 
+{$IFDEF CPUI8086}
 procedure InitSysError; external;
 procedure DoneSysError; external;
+{$ELSE}
+procedure InitSysError; begin end;
+procedure DoneSysError; begin end;
+{$ENDIF}
 
 {$V-}
 procedure SwapStatusLine(var Buffer; ShadowAttr: Byte); near; assembler;
-asm     cld
+asm
+{$IFDEF CPUI8086}
+     cld
         mov     cl,ScreenWidth.Byte
         xor     ch,ch
         mov     al,ScreenHeight.Byte
@@ -1638,6 +1902,10 @@ asm     cld
         add     si,2
         loop    @@4
         pop     ds
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
 
 function SystemError(ErrorCode: Integer; Drive: Byte): Integer;
@@ -1665,7 +1933,7 @@ begin
  MoveCStr(PByteArray(ScreenBuffer)^[X], P^, Byte(State)*AC+Byte(not State)*C);
 end;
 
-function MPos(P: TPoint): Integer;
+function MPos(P: Objects.TPoint): Integer;
   var X, I, N: Integer;
 begin
  MPos := -1; N := NumButtons[ErrorCode];
@@ -1676,7 +1944,7 @@ begin
         begin MPos := I; Exit end;
 end;
 
-procedure ControlMousePos(P: TPoint);
+procedure ControlMousePos(P: Objects.TPoint);
   var I,J: Integer;
 begin
   J := MPos(P);
@@ -1687,7 +1955,7 @@ begin
   ShowMouse;
 end;
 
-var LM: TPoint;
+var LM: Objects.TPoint;
 
 begin
 
@@ -1878,17 +2146,191 @@ end;
 
 { String formatting routines }
 
+{$IFDEF CPUI8086}
 {$L FORMAT.OBJ}
-
 procedure Format_Str(var Result: String; const Format: String; var Params); far; external;
+{$ELSE}
+procedure Format_Str(var Result: String; const Format: String; var Params);
+type
+  PParamArray = ^TParamArray;
+  TParamArray = array[0..63] of LongWord;
+var
+  ParamPtr: PParamArray;
+  ParamIdx: Integer;
+  FPos, FLen: Integer;
+  Ch, PadChar: Char;
+  LeftJust: Boolean;
+  Width: Integer;
+  StrVal: String;
+  NumVal: LongInt;
+  PStr: PString;
+
+  function IntToHex(Val: LongWord): String;
+  const
+    HexChars: array[0..15] of Char = '0123456789ABCDEF';
+  var
+    H: String;
+  begin
+    if Val = 0 then
+    begin
+      IntToHex := '0';
+      Exit;
+    end;
+    H := '';
+    while Val > 0 do
+    begin
+      H := HexChars[Val and $F] + H;
+      Val := Val shr 4;
+    end;
+    IntToHex := H;
+  end;
+
+begin
+  Result := '';
+  ParamPtr := @Params;
+  ParamIdx := 0;
+  FPos := 1;
+  FLen := Length(Format);
+  while FPos <= FLen do
+  begin
+    Ch := Format[FPos];
+    Inc(FPos);
+    if Ch <> '%' then
+    begin
+      Result := Result + Ch;
+    end
+    else
+    begin
+      if FPos > FLen then Break;
+      Ch := Format[FPos];
+      Inc(FPos);
+      if Ch = '%' then
+      begin
+        Result := Result + '%';
+      end
+      else
+      begin
+        PadChar := ' ';
+        LeftJust := False;
+        Width := 0;
+        if Ch = '0' then
+        begin
+          PadChar := '0';
+          if FPos <= FLen then
+          begin
+            Ch := Format[FPos];
+            Inc(FPos);
+          end;
+        end;
+        if Ch = '-' then
+        begin
+          LeftJust := True;
+          if FPos <= FLen then
+          begin
+            Ch := Format[FPos];
+            Inc(FPos);
+          end;
+        end;
+        while (Ch >= '0') and (Ch <= '9') do
+        begin
+          Width := Width * 10 + (Ord(Ch) - Ord('0'));
+          if FPos <= FLen then
+          begin
+            Ch := Format[FPos];
+            Inc(FPos);
+          end
+          else
+            Break;
+        end;
+        if Ch = '#' then
+        begin
+          ParamIdx := Width;
+          Width := 0;
+          if FPos <= FLen then
+          begin
+            Ch := Format[FPos];
+            Inc(FPos);
+          end;
+        end;
+        StrVal := '';
+        case UpCase(Ch) of
+          'C':
+            begin
+              if ParamPtr <> nil then
+              begin
+                StrVal := Char(ParamPtr^[ParamIdx] and $FF);
+                Inc(ParamIdx);
+              end;
+            end;
+          'S':
+            begin
+              if ParamPtr <> nil then
+              begin
+                PStr := PString(Pointer(ParamPtr^[ParamIdx]));
+                Inc(ParamIdx);
+                if PStr <> nil then
+                  StrVal := PStr^;
+              end;
+            end;
+          'D':
+            begin
+              if ParamPtr <> nil then
+              begin
+                NumVal := LongInt(ParamPtr^[ParamIdx]);
+                Inc(ParamIdx);
+                Str(NumVal, StrVal);
+              end;
+            end;
+          'X':
+            begin
+              if ParamPtr <> nil then
+              begin
+                StrVal := IntToHex(ParamPtr^[ParamIdx]);
+                Inc(ParamIdx);
+              end;
+            end;
+        end;
+        if Length(StrVal) < Width then
+        begin
+          if LeftJust then
+          begin
+            while Length(StrVal) < Width do
+              StrVal := StrVal + ' ';
+          end
+          else
+          begin
+            if (PadChar = '0') and (Length(StrVal) > 0) and (StrVal[1] = '-') then
+            begin
+              Delete(StrVal, 1, 1);
+              while Length(StrVal) < Width - 1 do
+                StrVal := '0' + StrVal;
+              StrVal := '-' + StrVal;
+            end
+            else
+            begin
+              while Length(StrVal) < Width do
+                StrVal := PadChar + StrVal;
+            end;
+          end;
+        end;
+        Result := Result + StrVal;
+      end;
+    end;
+  end;
+end;
+{$ENDIF}
 
 procedure FormatStr;
 begin
   if @Params = nil then Result := Format else Format_Str(Result, Format, Params);
 end;
 
-procedure PrintStr(const S: String); assembler;
+procedure PrintStr(const S: String);
+{$IFDEF CPUI8086}
+assembler;
 asm
+{$IFDEF CPUI8086}
+
         PUSH    DS
         LDS     SI,S
         CLD
@@ -1900,12 +2342,24 @@ asm
         MOV     DX,SI
         INT     21H
         POP     DS
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
+{$ELSE}
+begin
+  Write(S);
+end;
+{$ENDIF}
 
 { Buffer move routines }
 
+{$IFDEF CPUI8086}
 procedure MoveBuf(var Dest; var Source; Attr: Byte; Count: Word); assembler;
 asm
+{$IFDEF CPUI8086}
+
         MOV     CX,Count
         JCXZ    @@5
         MOV     DX,DS
@@ -1927,10 +2381,16 @@ asm
 }
 @@4:    MOV     DS,DX
 @@5:
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
 
 procedure MoveChar(var Dest; C: Char; Attr: Byte; Count: Word); assembler;
 asm
+{$IFDEF CPUI8086}
+
         MOV     CX,Count
         JCXZ    @@4
         LES     DI,Dest
@@ -1951,10 +2411,16 @@ asm
         LOOP    @@2
 @@4:
 
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
 
 procedure MoveCStr(var Dest; const Str: String; Attrs: Word); assembler;
 asm
+{$IFDEF CPUI8086}
+
         MOV     DL,'~'
         PUSH    DS
         LDS     SI,Str
@@ -1979,10 +2445,16 @@ asm
 @@2:    XCHG    AH,BH
 @@LP:   LOOP    @@1
 @@3:    POP     DS
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
 
 procedure MoveStr(var Dest; const Str: String; Attr: Byte); assembler;
 asm
+{$IFDEF CPUI8086}
+
         MOV     DX,DS
         LDS     SI,Str
         CLD
@@ -2007,10 +2479,16 @@ asm
         LOOP    @@2
 }
 @@4:    MOV     DS,DX
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
 
 function CStrLen(const S: String): Integer; assembler;
 asm
+{$IFDEF CPUI8086}
+
         MOV     DL,'~'
         LES     DI,S
         MOV     CL,ES:[DI]
@@ -2028,7 +2506,122 @@ asm
 @@DEC:  DEC     BX
 @@AA:   LOOP    @@LOD
 @@2:    MOV     AX,BX
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
+{$ELSE}
+procedure MoveBuf(var Dest; var Source; Attr: Byte; Count: Word);
+var
+  I: Integer;
+  D: PWordArray;
+  S: PByteArray;
+  A: Word;
+begin
+  if Count = 0 then Exit;
+  D := @Dest;
+  S := @Source;
+  A := Word(Attr) shl 8;
+  for I := 0 to Count - 1 do
+    D^[I] := A or S^[I];
+end;
+
+procedure MoveChar(var Dest; C: Char; Attr: Byte; Count: Word);
+var
+  I: Integer;
+  D: PWordArray;
+  W: Word;
+begin
+  if Count = 0 then Exit;
+  D := @Dest;
+  if C <> #0 then
+  begin
+    W := (Word(Attr) shl 8) or Ord(C);
+    for I := 0 to Count - 1 do
+      D^[I] := W;
+  end
+  else
+  begin
+    W := Word(Attr) shl 8;
+    for I := 0 to Count - 1 do
+      D^[I] := (D^[I] and 255) or W;
+  end;
+end;
+
+procedure MoveCStr(var Dest; const Str: String; Attrs: Word);
+var
+  I, Len, DIdx: Integer;
+  D: PWordArray;
+  NormAttr, HighAttr, CurAttr: Word;
+  C, Tilde: Char;
+begin
+  Len := Length(Str);
+  if Len = 0 then Exit;
+  D := @Dest;
+  NormAttr := Byte(Lo(Attrs));
+  HighAttr := Byte(Hi(Attrs));
+  CurAttr := NormAttr;
+  Tilde := '~';
+  DIdx := 0;
+  for I := 1 to Len do
+  begin
+    C := Str[I];
+    if C = Tilde then
+    begin
+      if CurAttr = NormAttr then
+        CurAttr := HighAttr
+      else
+        CurAttr := NormAttr;
+    end
+    else if C = #0 then
+    begin
+      Tilde := #0;
+    end
+    else
+    begin
+      D^[DIdx] := (CurAttr shl 8) or Ord(C);
+      Inc(DIdx);
+    end;
+  end;
+end;
+
+procedure MoveStr(var Dest; const Str: String; Attr: Byte);
+var
+  I, Len: Integer;
+  D: PWordArray;
+  A: Word;
+begin
+  Len := Length(Str);
+  if Len = 0 then Exit;
+  D := @Dest;
+  A := Word(Attr) shl 8;
+  for I := 1 to Len do
+    D^[I - 1] := A or Ord(Str[I]);
+end;
+
+function CStrLen(const S: String): Integer;
+var
+  I, Len, Count: Integer;
+  C, Tilde: Char;
+begin
+  Len := Length(S);
+  Count := Len;
+  Tilde := '~';
+  for I := 1 to Len do
+  begin
+    C := S[I];
+    if C = Tilde then
+      Dec(Count)
+    else if C = #0 then
+    begin
+      Tilde := #0;
+      Dec(Count);
+    end;
+  end;
+  CStrLen := Count;
+end;
+{$ENDIF}
 
 { Drivers unit initialization and shutdown }
 
@@ -2037,7 +2630,11 @@ const
 var
   SaveExit: Pointer;
   Old09   : Pointer;
-  Vect09  : Pointer absolute $0000:$0024;
+  {$IFDEF CPUI8086}
+  Vect09: Pointer absolute $0000:$0024;
+{$ELSE}
+  Vect09: Pointer;
+{$ENDIF}
   ErrAdd  : Longint ;
 
 Procedure FatalError ;
@@ -2106,6 +2703,8 @@ var CO : word ;
 
   Function StoreBuffer(var Buf; Size:word ; FH : word ):word;assembler;
     asm
+{$IFDEF CPUI8086}
+
        mov  bx,FH
        push ds
         mov cx,Size
@@ -2118,7 +2717,11 @@ var CO : word ;
           inc  ax
          @@1:
        pop  ds
-    end;
+    
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
 
 
 begin
@@ -2183,7 +2786,7 @@ begin
        'CS  :' + Hex4(CSeg) + ^M^J +
        'DS  :' + Hex4(DSeg) + ^M^J +
        'SS  :' + Hex4(SSeg) + ^M^J +
-       'SP  :' + Hex4(SPtr) + ^M^J +
+       'SP  :' + Hex4(Word(LongInt(SPtr))) + ^M^J +
        'MEMm:' + Hex8(MaxAvail) + ^M^J +
        'MEMa:' + Hex8(MemAvail) + ^M^J +
        'hOrg:' + Hex8(Longint(HeapOrg)) + ^M^J +
@@ -2283,8 +2886,12 @@ begin
           end;
 end;
 
-procedure MoveColor(var Buf; Num, Attr: Byte);assembler;
+procedure MoveColor(var Buf; Num, Attr: Byte);
+{$IFDEF CPUI8086}
+assembler;
 asm
+{$IFDEF CPUI8086}
+
    les    bx,Buf
    xor    ch,ch
    mov    cl,Num
@@ -2296,10 +2903,29 @@ asm
    add    bx,2
    loop   @Rep
 @End:
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
+{$ELSE}
+var
+  I: Integer;
+  D: PWordArray;
+  A: Word;
+begin
+  if Num = 0 then Exit;
+  D := @Buf;
+  A := Word(Attr) shl 8;
+  for I := 0 to Num - 1 do
+    D^[I] := (D^[I] and 255) or A;
+end;
+{$ENDIF}
 
 procedure MakeCoords; near; assembler;
 asm
+{$IFDEF CPUI8086}
+
     les  bx, ScreenBuffer
     mov  ax, si
     mov  cl, 3
@@ -2314,8 +2940,13 @@ asm
     add  cx, cx
     mul  cx
     add  bx, ax
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
 
+{$IFDEF CPUI8086}
 procedure HideGraphCursor; far; assembler;
 asm
     cmp OldMouseX, 0
@@ -2616,6 +3247,8 @@ end;
 
 procedure MouseHandler; far; assembler;
 asm
+{$IFDEF CPUI8086}
+
         PUSHF
         PUSH    AX
         CLI
@@ -2702,6 +3335,10 @@ asm
 @@2:    MOV     MouseIntFlag,1
         STI
         POPF
+
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
 end;
 
 procedure StdMouseHide; far; assembler;
@@ -2755,6 +3392,8 @@ begin
  ShowMouseProc := ShowProc;
  HideMouseProc := HideProc;
  asm
+{$IFDEF CPUI8086}
+
   les dx,dword ptr p
   mov bx, dx
 {  mov ax, ds
@@ -2762,7 +3401,11 @@ begin
   mov cx,$ff
   mov ax,12
   int 33h
- end;
+ 
+{$ELSE}
+  xor eax, eax;
+{$ENDIF}
+end;
 end;
 
 procedure UninstallMouseHandler;
@@ -2948,6 +3591,27 @@ begin
  MouseEvents := False;
  UninstallMouseHandler;
 end;
+{$ELSE}
+procedure HideGraphCursor; begin end;
+procedure PrepareCharGen; begin end;
+procedure DoneCharGen; begin end;
+procedure ShowGraphCursor; begin end;
+procedure HideTextCursor; begin end;
+procedure ShowStdCursor; begin end;
+procedure HideStdCursor; begin end;
+procedure ShowTextCursor; begin end;
+procedure MouseInt; begin end;
+procedure MouseHandler; begin end;
+procedure StdMouseHide; begin end;
+procedure StdMouseShow; begin end;
+procedure InstallMouseHandler; begin end;
+procedure UninstallMouseHandler; begin end;
+procedure StdInitEvents; begin end;
+procedure InitEvents; begin end;
+procedure SetMouseSpeed(XS, YS: Byte); begin end;
+procedure StdDoneEvents; begin end;
+procedure DoneEvents; begin end;
+{$ENDIF}
 
 const
   DriversInit: Boolean = False;
@@ -2978,6 +3642,56 @@ begin
   InitSysError;
 end;
 
+procedure FlushScreenBuffer;
+var
+  H: Windows.THandle;
+  DummyMode: Windows.DWORD;
+  BufferSize, BufferCoord: Windows.TCoord;
+  WriteRegion: Windows.TSmallRect;
+  CharInfoBuf: array[0..80*50-1] of Windows.TCharInfo;
+  I, TotalCells: Integer;
+  Src: PWordArray;
+begin
+{$IFNDEF CPUI8086}
+  if ScreenBuffer = nil then Exit;
+  if (ConsoleOutputHandle = 0) or (ConsoleOutputHandle = Windows.INVALID_HANDLE_VALUE) then
+  begin
+    H := Windows.GetStdHandle(Windows.STD_OUTPUT_HANDLE);
+    if not Windows.GetConsoleMode(H, DummyMode) then
+      H := Windows.CreateFileA('CONOUT$', Windows.GENERIC_READ or Windows.GENERIC_WRITE,
+        Windows.FILE_SHARE_READ or Windows.FILE_SHARE_WRITE, nil, Windows.OPEN_EXISTING, 0, 0);
+    ConsoleOutputHandle := H;
+  end;
+  H := ConsoleOutputHandle;
+  if (H = 0) or (H = Windows.INVALID_HANDLE_VALUE) then Exit;
+  TotalCells := ScreenWidth * ScreenHeight;
+  if TotalCells > High(CharInfoBuf) + 1 then TotalCells := High(CharInfoBuf) + 1;
+  Src := PWordArray(ScreenBuffer);
+  for I := 0 to TotalCells - 1 do
+  begin
+    CharInfoBuf[I].AsciiChar := Char(Lo(Src^[I]));
+    CharInfoBuf[I].Attributes := Hi(Src^[I]);
+  end;
+  BufferSize.X := ScreenWidth;
+  BufferSize.Y := ScreenHeight;
+  BufferCoord.X := 0;
+  BufferCoord.Y := 0;
+  WriteRegion.Left := 0;
+  WriteRegion.Top := 0;
+  WriteRegion.Right := ScreenWidth - 1;
+  WriteRegion.Bottom := ScreenHeight - 1;
+  Windows.WriteConsoleOutputA(H, @CharInfoBuf[0], BufferSize, BufferCoord, WriteRegion);
+{$ENDIF}
+end;
+
+procedure SliceYield;
+begin
+{$IFNDEF CPUI8086}
+  FlushScreenBuffer;
+  Windows.Sleep(10);
+{$ENDIF}
+end;
+
 procedure SliceAwake;
 begin
   NewTimerSecs(LSliceTimer, 3);
@@ -2985,6 +3699,7 @@ begin
 end;
 
 begin
+{$IFDEF CPUI8086}
  asm
      mov  ah,12h
      mov  bl,10h
@@ -2994,6 +3709,9 @@ begin
      mov  EGAVGA, 1
 @NoEGAVGA:
  end;
+{$ELSE}
+  EGAVGA := True;
+{$ENDIF}
   DetectMouse;
   Vesa_Found := -1;
 {$IFDEF FPC}{$IFNDEF CPUI8086}

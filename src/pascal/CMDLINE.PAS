@@ -172,6 +172,7 @@ procedure TCommandLine.Update;
      BB: Boolean;
 begin
  if GetState(sfDisabled) then Exit;
+{$IFDEF CPUI8086}
  asm
    mov ah,3
    xor bx,bx
@@ -179,6 +180,9 @@ begin
    mov A1, dx
    mov A2, cx
   end;
+{$ELSE}
+  A1 := 0; A2 := 0;
+{$ENDIF}
   if (SSaver <> nil) or (Size.X = 0) or (Size.Y = 0) or
     (Desktop^.GetState(sfActive) and
     (Desktop^.Current <> nil) and
@@ -187,6 +191,7 @@ begin
   P.X := CurX - DeltaX + Length(Dir); P.Y := 0;
   MakeGlobal(P, P);
   BB := not Overwrite  xor (InterfaceData.Options and ouiBlockInsertCursor <> 0);
+{$IFDEF CPUI8086}
   asm
         MOV     CX,CursorLines
         LES     DI,Self
@@ -204,6 +209,9 @@ begin
         MOV     DH, BYTE PTR P+2
         INT     10H
   end;
+{$ELSE}
+  LocateCursor(P.X, P.Y);
+{$ENDIF}
 end;
 
 procedure TCommandLine.SetState;

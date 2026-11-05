@@ -479,6 +479,7 @@ procedure TFilePanel.Draw;
   var P: PFileRec;
       CC: Byte;
       JJ: Integer;
+       _k: Integer;
  begin
    JJ := J*LineLength;
    if (Files <> nil) and (Idx < Files^.Count) then
@@ -486,7 +487,8 @@ procedure TFilePanel.Draw;
       P := Files^.At(Idx);
       CC := HLC[P^.TType];
       if (Idx = CurPos) then begin LastCurPos.X := JJ; LastCurPos.Y := I+1 end;
-      asm
+      {$IFDEF CPUI8086}
+asm
        les bx, P
        mov ax, Idx
        cmp ax, CurPos
@@ -504,9 +506,20 @@ procedure TFilePanel.Draw;
      @@2:
        mov C, al
       end;
+{$ELSE}
+      if Idx = CurPos then
+      begin
+        if P^.Selected then C := C5 else C := C4;
+      end
+      else
+      begin
+        if P^.Selected then C := C3 else C := CC;
+      end;
+{$ENDIF}
       if QuickSearch then if (Idx = CurPos) then
         begin SetCursor(JJ+SearchX, I); ShowCursor; NormalCursor end;
       if LineLength = 13 then
+      {$IFDEF CPUI8086}
       asm
        les bx, P
        lea di, B
@@ -524,7 +537,18 @@ procedure TFilePanel.Draw;
        add di,2
        dec cx
        jnz @@3
-      end else begin
+      end
+{$ELSE}
+      begin
+        for _k := 1 to 12 do
+        begin
+          if _k <= Length(P^.Name) then
+            B[JJ + _k - 1] := (Word(C) shl 8) or Ord(P^.Name[_k])
+          else
+            B[JJ + _k - 1] := (Word(C) shl 8) or Ord(' ');
+        end;
+      end
+{$ENDIF} else begin
         MoveChar(B[JJ], ' ', C, LineLength);
         GetFull(B[JJ], P, C);
       end;
@@ -778,6 +802,8 @@ procedure TInfoView.Draw;
      PF, PPF: PFileRec;
      S, S1: String;
      Y: Integer;
+     _cellIdx, _colLeft: Integer;
+     _ch: Char;
 
  var FR: TFileRec;
 
@@ -791,7 +817,8 @@ begin
  if FMSetup.Show and fmsDivider <> 0 then
  begin
   Y := 1;
-  asm
+  {$IFDEF CPUI8086}
+   asm
    lea di, B
    mov cx, I
    mov ah, byte ptr C2
@@ -817,6 +844,28 @@ begin
    loop @@1
  @@4:
   end;
+{$ELSE}
+   _cellIdx := 0;
+   while _cellIdx < I do
+   begin
+     _colLeft := C1;
+     while (_cellIdx < I) and (_colLeft > 0) do
+     begin
+       B[_cellIdx] := (Byte(C2) shl 8) or $C4;
+       Inc(_cellIdx);
+       Dec(_colLeft);
+     end;
+     if _cellIdx < I then
+     begin
+       if _cellIdx = I - 1 then
+         _ch := #$C4
+       else
+         _ch := #$C1;
+       B[_cellIdx] := (Byte(C2) shl 8) or Ord(_ch);
+       Inc(_cellIdx);
+     end;
+   end;
+{$ENDIF}
   I := 0; C2 := (C2 shl 8) or Byte('Á');
   if Panel^.LineLength > 13 then
   While I < Size.X do

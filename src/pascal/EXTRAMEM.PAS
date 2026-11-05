@@ -98,7 +98,9 @@ function xms_MaxAvail : Longint;
 IMPLEMENTATION uses Commands, Startup;
 
 
-function EMSPresent: Boolean; assembler;
+function EMSPresent: Boolean;
+begin
+{$IFDEF CPUI8086}
 asm
  xor ax, ax
  mov byte ptr @Res, al
@@ -142,16 +144,28 @@ asm
  xor ah, ah
  mov al, byte ptr @Res
 end;
+{$ELSE}
+  EMSPresent := False;
+{$ENDIF}
+end;
 
-function EMSFreePages: Word; assembler;
+function EMSFreePages: Word;
+begin
+{$IFDEF CPUI8086}
 asm
  mov ax, 4200h
  int 67h
  mov ax, bx
 end;
+{$ELSE}
+  EMSFreePages := 0;
+{$ENDIF}
+end;
 
 
-procedure DetectXMS; assembler;
+procedure DetectXMS;
+begin
+{$IFDEF CPUI8086}
 asm
      mov     ax,4300h
      int     2Fh
@@ -173,12 +187,22 @@ asm
      mov     XMSFound, al
 @@1:
 end;
+{$ELSE}
+  XMSFound := False;
+{$ENDIF}
+end;
 
-function XMSFree: Word; assembler;
+function XMSFree: Word;
+begin
+{$IFDEF CPUI8086}
 asm
  mov ah, 08h
  call [XMSControl]
  mov ax, dx
+end;
+{$ELSE}
+  XMSFree := 0;
+{$ENDIF}
 end;
 
 
@@ -483,6 +507,7 @@ const
 
   function xms_MaxAvail : Longint;
   begin
+{$IFDEF CPUI8086}
     xms_Init;
     if xms_IOsts = 0 then
     asm
@@ -502,12 +527,16 @@ const
     end
     else
       xms_MaxAvail := 0;
+{$ELSE}
+    xms_MaxAvail := 0;
+{$ENDIF}
   end;
 
   (* /////////////////////////////////////////////////////////////////////// *)
 
   function xms_MemAvail : Longint;
   begin
+{$IFDEF CPUI8086}
     xms_Init;
     if xms_IOsts = 0 then
     asm
@@ -528,6 +557,9 @@ const
     end
     else
       xms_MemAvail := 0;
+{$ELSE}
+    xms_MemAvail := 0;
+{$ENDIF}
   end;
 
   destructor TXMSStream.Done;
@@ -538,13 +570,9 @@ const
       xms_FreeMem(Handle);
   end;
 
-FUNCTION ExistUMBmem : Boolean; assembler;
-{ Attempts to allocate an impossibly large UMB.  On failure ax     }
-{ contains 0, bl indicates UMB's unimplemented if $80, or $bx      }
-{ on other error.  No provision made for success here. Impossible  }
-{ to succeed.  Note that the UMB manager doesn't necessarily depend}
-{ on existence of XMS manager, but if there is no control call     }
-{ vector there is no way to call this UMB function.                }
+FUNCTION ExistUMBmem : Boolean;
+begin
+{$IFDEF CPUI8086}
 asm
   xor  dx,dx              { Default to False }
   xor  al,al              { Return FALSE by default }
@@ -559,9 +587,14 @@ asm
   mov  al,1               { return True }
 @exit:
 end;
+{$ELSE}
+  ExistUMBmem := False;
+{$ENDIF}
+end;
 
 procedure InitExtraMem;
 BEGIN
+{$IFDEF CPUI8086}
  if SystemData.Options and ossDisableXMS <> 0 then
  begin
    EMSFound := False; XMSFound := False
@@ -578,6 +611,11 @@ BEGIN
     end;
    DetectXMS;
  end;
+{$ELSE}
+  EMSFound := False;
+  XMSFound := False;
+  EMSSize := 0;
+{$ENDIF}
 end;
  {
  if XMSFound then

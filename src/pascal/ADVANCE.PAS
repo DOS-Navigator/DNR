@@ -48,6 +48,8 @@
 {$A-,B-}
 
 UNIT Advance;
+{$J+}
+
 {$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 INTERFACE
@@ -486,7 +488,8 @@ end;
 
  procedure Beep;
 
- procedure Twf(a,b : Word);assembler;
+ {$IFDEF CPUI8086}
+procedure Twf(a,b : Word);assembler;
  asm
          cli
          mov dx,60
@@ -507,6 +510,11 @@ end;
          jnz @L0
          sti
  end;
+{$ELSE}
+procedure Twf(a,b : Word);
+begin
+end;
+{$ENDIF}
 
  begin
   case N of
@@ -740,13 +748,17 @@ begin
   Strg := R;
 end;
 
-Procedure SetBlink(Mode : boolean); assembler;
+Procedure SetBlink(Mode : boolean);
+begin
+{$IFDEF CPUI8086}
 asm
       MOV  AX,1003H
       MOV  BL,Mode
       push bp
       INT  10h
       pop  bp
+end;
+{$ENDIF}
 end;
 
 Function  ItoS(a:longint):string;
@@ -779,54 +791,27 @@ end;
 
 Function  FStr(a:TSize):string;
  var s,s1 : string[40];
-     s1l: byte absolute s1;
-     i : Integer;
+     i, count : Integer;
      C: Char;
 begin
  Str(A:0:0, S);
- if CountryInfo.ThouSep[0] > #0 then
+ if (CountryInfo.ThouSep[0] > #0) and (Length(S) > 0) then
    begin
       C := CountryInfo.ThouSep[1];
-      asm
-       lea si, s
-       lea di, s1
-       mov bx, di
-       mov al, ss:[si]
-       xor ah, ah
-       mov cx, 3
-       div cl
-       mov byte ptr ss:[bx], 0
-       mov cl, ss:[si]
-       mov dl, ah
-       Mov al, C
-       or  dl, dl
-       jnz @@1
-       mov dl, 3
-      @@1:
-       or  cl, cl
-       jz  @@3
-      @@2:
-       mov ah, ss:[si+1]
-       mov byte ptr ss:[di+1], ah
-       inc byte ptr ss:[bx]
-       inc di
-       inc si
-       dec cl
-       jz  @@3
-       dec dl
-       jnz @@2
-       mov dl, 3
-       mov byte ptr ss:[di+1], al
-       inc di
-       inc byte ptr ss:[bx]
-       jmp @@2
-      @@3:
+      s1 := '';
+      count := 0;
+      for i := Length(S) downto 1 do
+      begin
+        if (count > 0) and (count mod 3 = 0) then
+          s1 := C + s1;
+        s1 := S[i] + s1;
+        Inc(count);
       end;
    end else S1 := S;
  if Length(S1)>12 then
  begin
-   Dec(s1l,3);
-   s1[s1l] := 'K';
+   SetLength(s1, Length(s1) - 3);
+   s1[Length(s1)] := 'K';
  end;
  FStr:=s1;
 end;
@@ -1109,6 +1094,20 @@ begin s:=''; for c:=1 to 4 do begin
 end;
 
 function ValidDrive(dr : char) : Boolean;
+{$IFNDEF CPUI8086}
+var
+  Drives: LongWord;
+  Shift: Integer;
+begin
+  ValidDrive := False;
+  dr := UpCase(dr);
+  if not (dr in ['A'..'Z']) then Exit;
+  Shift := Ord(dr) - Ord('A');
+  Drives := Windows.GetLogicalDrives;
+  ValidDrive := (Drives and (1 shl Shift)) <> 0;
+end;
+{$ELSE}
+
 var s,s1 : string[40];
     B,B1: Byte;
 begin
@@ -1143,7 +1142,9 @@ begin
     mov  [bp-1],al
  end;
 end;
+{$ENDIF}
 
+{$IFDEF CPUI8086}
 function DumpStr;
  var S: string;
 
@@ -1288,6 +1289,34 @@ begin
  end;
  DumpStr := S;
 end;
+{$ELSE}
+function DumpStr(var B; Addr: LongInt; Count: Integer; Filter: Byte): string;
+var
+  HexDigits: array[0..15] of Char;
+  Bytes: array[0..255] of Byte absolute B;
+  i: Integer;
+  bval: Byte;
+  c: Char;
+  HexPart, AscPart: string;
+begin
+  HexDigits := '0123456789ABCDEF';
+  if Count <= 0 then begin DumpStr := ''; Exit; end;
+  HexPart := Hex8(Addr) + ': ';
+  AscPart := '';
+  for i := 0 to Count - 1 do
+  begin
+    bval := Bytes[i];
+    HexPart := HexPart + HexDigits[bval shr 4] + HexDigits[bval and $0F] + ' ';
+    if bval = 0 then c := '.'
+    else if Filter = 0 then c := Chr(bval)
+    else if bval < 32 then c := #250
+    else if (Filter = 1) and (bval >= 128) then c := #250
+    else c := Chr(bval);
+    AscPart := AscPart + c;
+  end;
+  DumpStr := HexPart + #179' ' + AscPart;
+end;
+{$ENDIF}
 
 procedure InitUpcase; near;
  var C: Char;
@@ -1306,83 +1335,38 @@ begin
 end;
 
 function UpCaseStr(S: string): string;
+var i: Integer;
 begin
- asm
-  cmp UpcaseInit, 0
-  jnz @@@1
-  call InitUpcase
-@@@1:
-  lea si, UpCaseArray
-  lea di, S
-  mov cl, ss:[di]
-  xor ch, ch
-  xor bh, bh
-  or  cl, cl
-  jz  @Exit
-@@1:
-  inc di
-  mov al, ss:[di]
-  or al, al
-  jz @@2
-  mov bl, al
-  mov al, ds:[bx+si]
-  mov ss:[di], al
-@@2:
-  loop @@1
-@Exit:
- end;
- UpCaseStr := S;
+  if not UpcaseInit then InitUpcase;
+  for i := 1 to Length(S) do
+    S[i] := UpCaseArray[S[i]];
+  UpCaseStr := S;
 end;
 
 function LowCaseStr(S: string): string;
+var i: Integer;
 begin
- asm
-  cmp UpcaseInit, 0
-  jnz @@@1
-  call InitUpcase
-@@@1:
-  lea si, LowCaseArray
-  lea di, S
-  mov cl, ss:[di]
-  xor ch, ch
-  xor bh, bh
-  or  cl, cl
-  jz  @Exit
-@@1:
-  inc di
-  mov al, ss:[di]
-  or al, al
-  jz @@2
-  mov bl, al
-  mov al, ds:[bx+si]
-  mov ss:[di], al
-@@2:
-  loop @@1
-@Exit:
- end;
- LowCaseStr := S;
+  if not UpcaseInit then InitUpcase;
+  for i := 1 to Length(S) do
+    S[i] := LowCaseArray[S[i]];
+  LowCaseStr := S;
 end;
 
 const LastCase: Byte = 2;
 var  Tran: array[Char] of Char;
 
 procedure MakeCase(CaseSensitive: Boolean);
+var i: Integer;
 begin
- if not UpcaseInit then InitUpcase;
- if Byte(CaseSensitive) <> LastCase then
- if CaseSensitive then
-  asm
-   lea bx, Tran
-   add bx, 255
-   mov cx, 256
-@@1:
-   mov ax, cx
-   dec ax
-   mov ds:[bx], al
-   dec bx
-   loop @@1
-  end else Move(UpCaseArray, Tran, 256);
-  LastCase := Byte(CaseSensitive);
+  if not UpcaseInit then InitUpcase;
+  if Byte(CaseSensitive) <> LastCase then
+  begin
+    if CaseSensitive then
+      for i := 0 to 255 do Tran[Char(i)] := Char(i)
+    else
+      Move(UpCaseArray, Tran, 256);
+    LastCase := Byte(CaseSensitive);
+  end;
 end;
 
 function SearchFor;
@@ -1396,46 +1380,11 @@ begin
  SearchFor := 0;
  if S = '' then Exit;
  MakeCase(CaseSensitive);
- asm
-  lea di, D
-  mov ax, ss
-  mov es, ax
-  mov cx, 256
-  lea bx, S
-  mov al, ss:[bx]
-  xor ah, ah
-  cld
-  rep stosw
-  mov dx, ax
-  mov cx, ax
-  lea bx, Tran
-  lea si, S
-@@@2:
-  inc si
-  mov al, ss:[si]
-  push bx
-  add bx, ax
-  mov al, ds:[bx]
-  pop bx
-  mov ss:[si], al
-  loop @@@2
-  mov cx, dx
-  lea si, D
-  lea bx, S
-@@@1:
-  inc bx
-  dec dx
-  mov al, ss:[bx]
-  xor ah, ah
-  add ax, ax
-  push si
-  add si, ax
-  mov ss:[si], dx
-  pop si
-  loop @@@1
- end;
- M := Length(S) - 1;
+ FillWord(D, 256, Length(S));
  for I := 1 to Length(S) do S[I] := Tran[S[I]];
+ for I := 1 to Length(S) - 1 do
+   D[S[I]] := Length(S) - I;
+ M := Length(S) - 1;
  while M < L do
   begin
    C := Tran[ChBuf[M]];
@@ -1484,6 +1433,64 @@ begin
 end;
 
 
+{$IFNDEF CPUI8086}
+FUNCTION GetDrive : byte;
+var S: string;
+begin
+  GetDir(0, S);
+  if Length(S) > 0 then GetDrive := Byte(UpCase(S[1])) - 65 else GetDrive := 2;
+end;
+
+PROCEDURE SetDrive(a : byte);
+var S: string[3];
+begin
+  S := Chr(a + 65) + ':';
+  {$I-} System.ChDir(S); {$I+} InOutRes := 0;
+end;
+
+function KeyPressed: Boolean;
+var
+  H: Windows.THandle;
+  NumEvents: Windows.DWORD;
+  Recs: array[0..15] of Windows.TInputRecord;
+  NumRead: Windows.DWORD;
+  I: Integer;
+begin
+  KeyPressed := False;
+  H := Windows.GetStdHandle(Windows.STD_INPUT_HANDLE);
+  if not Windows.GetConsoleMode(H, NumEvents) then
+    H := Windows.CreateFileA('CONIN$', Windows.GENERIC_READ or Windows.GENERIC_WRITE,
+      Windows.FILE_SHARE_READ or Windows.FILE_SHARE_WRITE, nil, Windows.OPEN_EXISTING, 0, 0);
+  if (H = 0) or (H = Windows.INVALID_HANDLE_VALUE) then Exit;
+  NumEvents := 0;
+  if not Windows.GetNumberOfConsoleInputEvents(H, NumEvents) then Exit;
+  if NumEvents = 0 then Exit;
+  if NumEvents > 16 then NumEvents := 16;
+  if not Windows.PeekConsoleInputA(H, Recs[0], NumEvents, NumRead) then Exit;
+  for I := 0 to Integer(NumRead) - 1 do
+  begin
+    if (Recs[I].EventType = Windows.KEY_EVENT) and (Recs[I].Event.KeyEvent.bKeyDown) then
+    begin
+      KeyPressed := True;
+      Exit;
+    end;
+  end;
+end;
+
+function GetCurDrive: Char;
+var S: string;
+begin
+  GetDir(0, S);
+  if Length(S) > 0 then GetCurDrive := UpCase(S[1]) else GetCurDrive := 'C';
+end;
+
+procedure SetCurDrive(C: Char);
+var S: string[3];
+begin
+  S := UpCase(C) + ':';
+  {$I-} System.ChDir(S); {$I+} InOutRes := 0;
+end;
+{$ELSE}
 FUNCTION GetDrive : byte; assembler; asm mov ah,$19; int 21h; end;
 PROCEDURE SetDrive(a : byte); assembler; asm mov ah,$0E; mov dl,a; int $21; end;
 
@@ -1496,7 +1503,6 @@ asm
  xor ax,ax
 @@1:
 end;
-
 
 function GetCurDrive; assembler;
 asm
@@ -1513,12 +1519,17 @@ asm
  sub dl, 65
  int 21h
 end;
+{$ENDIF}
 
 procedure EraseByName;
 var
   F: file;
 begin
-  Assign(F, FName); Erase(F);
+  {$I-}
+  Assign(F, FName);
+  Erase(F);
+  {$I+}
+  InOutRes := 0;
 end;
 
 procedure EraseFile;
@@ -1527,18 +1538,22 @@ begin
   ClrIO;
   FileMode := $42;
   Assign(F, N);
+  {$I-}
   Erase(F);
   case IOResult of
     5 : begin
           SetFAttr(F, Archive);
           Erase(F);
         end;
+{$IFDEF CPUI8086}
    19 : asm;
           mov  ah,0dh { Reset Disks }
           int  21h
         end;
+{$ENDIF}
   end;
   ClrIO;
+  {$I+}
 end;
 
 FUNCTION MakeNormName(S, S1: string): string;
@@ -1628,7 +1643,9 @@ begin
    System.ChDir(S);
 end;
 
-procedure LocateCursor(X, Y: Byte); assembler;
+procedure LocateCursor(X, Y: Byte);
+{$IFDEF CPUI8086}
+assembler;
 asm
         MOV     AH, 2
         XOR     BX, BX
@@ -1636,6 +1653,14 @@ asm
         MOV     DH, Y
         INT     10H
 end;
+{$ELSE}
+var Coord: Windows.TCoord;
+begin
+  Coord.X := X;
+  Coord.Y := Y;
+  Windows.SetConsoleCursorPosition(Windows.GetStdHandle(STD_OUTPUT_HANDLE), Coord);
+end;
+{$ENDIF}
 
  procedure FillWord(var B;Count, W: Word);
  type TWords = array[0..32766] of Word;
@@ -1705,7 +1730,7 @@ begin
    R.TermQ := 0;
    LongInt(R.Env) := 0;
    P := @R;
-
+{$IFDEF CPUI8086}
    asm
      push ds
      mov ax, $6400
@@ -1715,6 +1740,7 @@ begin
      int 21h
      pop ds
    end;
+{$ENDIF}
 
 end;
 
@@ -1811,7 +1837,9 @@ begin
   end;
 end;
 
-Procedure Sound ( Hz : word );assembler;
+Procedure Sound ( Hz : word );
+begin
+{$IFDEF CPUI8086}
      asm
         mov     ax,Hz
         cmp     ax,21
@@ -1824,7 +1852,7 @@ Procedure Sound ( Hz : word );assembler;
         out     061h,al
         mov     al,0B6h
         out     043h,al
-@@1:    mov     ax,04F38h  {  divider = 144f38h / Hz  }
+@@1:    mov     ax,04F38h
         mov     dx,014h
         div     bx
         out     042h,al
@@ -1832,13 +1860,19 @@ Procedure Sound ( Hz : word );assembler;
         out     042h,al
 @@2:
     end;
+{$ENDIF}
+end;
 
- Procedure Nosound ;assembler;
+Procedure Nosound;
+begin
+{$IFDEF CPUI8086}
      asm
         in      al,061h
         and     al,11111100b
         out     061h,al
      end;
+{$ENDIF}
+end;
 
 
   function FindParam(const S: string): Integer;
@@ -1919,7 +1953,9 @@ begin
   MakeCMDParams := FreeStr
 end;
 
-function Chk4Dos: Boolean; assembler;
+function Chk4Dos: Boolean;
+begin
+{$IFDEF CPUI8086}
   asm
     xor bh, bh
     mov ax, $D44D
@@ -1933,6 +1969,10 @@ function Chk4Dos: Boolean; assembler;
  @1:
     mov ax, bx
   end;
+{$ELSE}
+  Chk4Dos := False;
+{$ENDIF}
+end;
 
 
 
@@ -2229,6 +2269,7 @@ begin
 end;
 
 BEGIN
+{$IFDEF CPUI8086}
  asm
   int 11h
   test al, 1
@@ -2245,8 +2286,18 @@ BEGIN
     xor bx, bx
     int 21h
  end;
- UpcaseArray[#0] := #0;
- LowcaseArray[#0] := #0;
- Dos40 := Lo(DosVersion)>=4;
- OS210 := (Lo(DosVersion)>=20) and (GetEnv('OS2COMSPEC') <> '');
+{$ELSE}
+  NumFloppy := 0;
+  FillChar(DCountryInfo, SizeOf(DCountryInfo), 0);
+  DCountryInfo.DateFmt := 0;
+  DCountryInfo.Currency[1] := '$';
+  DCountryInfo.ThSep[1] := ',';
+  DCountryInfo.DecSep[1] := '.';
+  DCountryInfo.DateSep[1] := '/';
+  DCountryInfo.TimeSep[1] := ':';
+{$ENDIF}
+  UpcaseArray[#0] := #0;
+  LowcaseArray[#0] := #0;
+  Dos40 := Lo(DosVersion)>=4;
+  OS210 := (Lo(DosVersion)>=20) and (GetEnv('OS2COMSPEC') <> '');
 END.

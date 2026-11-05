@@ -648,23 +648,26 @@ begin
 end;
 
 procedure RegisterType(var S: TStreamRec);
-{ Was 16-bit assembler. Rewritten in Pascal after FPC's Free Vision
-  (packages/rtl-extra/src/inc/objects.pp). The original also verified that
-  S lived in the data segment (CMP AX,S.Word[2]); that check is meaningless
-  in a flat address space and is dropped. }
+{ Was 16-bit assembler. Rewritten in Pascal.
+  Matches original Borland Pascal semantics: duplicate registration is
+  ignored without error; only ObjType = 0 triggers RegisterError. }
 var
   P: PStreamRec;
 begin
-  P := StreamTypes;
-  while (P <> nil) and (P^.ObjType <> S.ObjType) do
-    P := P^.Next;
-  if (P = nil) and (S.ObjType <> 0) then
+  if S.ObjType = 0 then
   begin
-    S.Next := StreamTypes;
-    StreamTypes := @S;
-  end
-  else
     RegisterError;
+    Exit;
+  end;
+  P := StreamTypes;
+  while P <> nil do
+  begin
+    if P^.ObjType = S.ObjType then
+      Exit;
+    P := P^.Next;
+  end;
+  S.Next := StreamTypes;
+  StreamTypes := @S;
 end;
 
 procedure ReRegisterType(var S: TStreamRec);

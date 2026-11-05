@@ -1607,6 +1607,7 @@ type
                            1: (w0,w1,w2,w3 : word);
                           end;
 
+{$IFDEF CPUI8086}
 procedure Prepare1Str(var Sou,Dst);near;external;
 function  GetUUxlt(b:byte):char;near;external;
 function  GetLnCrc(var Buf;Size:word):Char;near;external;
@@ -1624,6 +1625,21 @@ asm             mov     ax,word ptr [L+0]
                 inc     ax
 @@Exit:
 end;
+{$ELSE}
+procedure Prepare1Str(var Sou,Dst); begin end;
+function  GetUUxlt(b:byte):char; begin GetUUxlt := #0; end;
+function  GetLnCrc(var Buf;Size:word):Char; begin GetLnCrc := #0; end;
+procedure cCrc(var Buf;Size:word;var PrevSum:word); begin end;
+procedure Crc64(var Buf;Size:word;var PrevSum;var Cnt:word); begin end;
+procedure Clear64(n:T64); begin end;
+
+function SmartDIV(L:LongInt;W:Word):Word;
+begin
+  if W = 0 then SmartDIV := 0
+  else if (L mod W) <> 0 then SmartDIV := (L div W) + 1
+  else SmartDIV := L div W;
+end;
+{$ENDIF}
 
 procedure UuEncode(const FName: String);
 type

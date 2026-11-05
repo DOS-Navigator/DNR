@@ -711,28 +711,21 @@ var
   State: (Undefined, Wrapping, NotWrapping);
   P: PParagraph;
 
-procedure CopyToBuffer(var Line: String; Wrapping: Boolean); assembler;
-asm
-        PUSH    DS
-        CLD
-        PUSH    DS
-        POP     ES
-        MOV     DI,OFFSET Buffer
-        ADD     DI,Ofs
-        LDS     SI,Line
-        LODSB
-        XOR     AH,AH
-        ADD     ES:Ofs,AX
-        XCHG    AX,CX
-        REP     MOVSB
-        XOR     AL,AL
-        TEST    Wrapping,1      { Only add a #13, line terminator, if not }
-        JE      @@1             { currently wrapping the text. Otherwise  }
-        MOV     AL,' '-13       { add a ' '.                              }
-@@1:    ADD     AL,13
-@@2:    STOSB
-        POP     DS
-        INC     Ofs
+procedure CopyToBuffer(var Line: String; Wrapping: Boolean);
+var
+  Len: Integer;
+begin
+  Len := Length(Line);
+  if Len > 0 then
+  begin
+    Move(Line[1], Buffer[Ofs], Len);
+    Inc(Ofs, Len);
+  end;
+  if Wrapping then
+    Buffer[Ofs] := Byte(' ')
+  else
+    Buffer[Ofs] := 13;
+  Inc(Ofs);
 end;
 
 procedure AddToBuffer(var Line: String; Wrapping: Boolean);

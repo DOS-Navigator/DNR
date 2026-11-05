@@ -453,11 +453,13 @@ var
     if SwpDir[Length(SwpDir)] <> '\' then SwpDir := SwpDir+'\'; ClrIO;
     UpStr(SwpDir);
     if RunFirst then EraseFile(SwpDir+'DN'+ItoS(DNNumber)+'.SWP');
+{$IFDEF USE_OVERLAY}
     S := GetEnv('DNOVR');
     if S = '' then S := StartupDir + 'DN.OVR'
               else S := MakeNormName(S, 'DN.OVR');
     OvrFileMode := $40;
     InitOverlay(S);
+{$ENDIF}
   end;
 
 begin
@@ -584,8 +586,9 @@ const
 
   ops : byte = opUnk;
 
-procedure CheckOS; assembler;
-{ Currently Supports DesqView, Microsoft Windows and IBM's OS/2 }
+procedure CheckOS;
+begin
+{$IFDEF CPUI8086}
 asm
   mov   ops, opDOS   { Default DOS }
   mov   ah, 30h      { AH = 30h }
@@ -620,9 +623,15 @@ asm
   jmp   @Finish
 
 @FINISH:
+end;
+{$ELSE}
+  ops := opWin;
+{$ENDIF}
 end; { checkos }
 
-procedure GiveSlice; assembler; {Gives up remainder of clock cycle }
+procedure GiveSlice;
+begin
+{$IFDEF CPUI8086}
 asm                             { under dos, windows, os/2 }
   cmp   ops, opUnk
   jne   @Chk
@@ -655,20 +664,28 @@ asm                             { under dos, windows, os/2 }
 
 @NONE:
 
+end;
+{$ELSE}
+  SliceYield;
+{$ENDIF}
 end; {GiveSlice}
 
 
 procedure TinySlice;
 begin
+{$IFDEF CPUI8086}
  if StartupData.Slice and osuInt28 <> 0 then
  asm
   cmp DESQDetected, 0
   je  @@1
   mov ax, $1000
   int 15h
-@@1:
+ @@1:
   int 28h
  end;
+{$ELSE}
+  SliceYield;
+{$ENDIF}
 end;
 
 var
@@ -752,7 +769,7 @@ begin
  UpdateAll(On);
 
  if CtrlWas then
-   if mem[$40:$17] and kbCtrlShift = 0 then
+   if QueryShiftState and kbCtrlShift = 0 then
      begin
        CtrlWas := Off;
        {if DelSpaces(CmdLine.Str) = '' then}
@@ -786,7 +803,7 @@ begin
                  UpView(MenuBar);
      cmMenuOff: if (Event.InfoPtr = MenuBar) then
                  UpView(Desktop);
-     cmEnvEdit: {if LoaderSeg <> 0 then }EditDosEvironment(Ptr(PWordArray(Ptr(LoaderSeg, 0))^[$2C div 2], 0));
+     cmEnvEdit: {if LoaderSeg <> 0 then }EditDosEvironment(PByteArray(Ptr(PWordArray(Ptr(LoaderSeg, 0))^[$2C div 2], 0)));
      else
      {
      cmCalculator,
@@ -885,7 +902,9 @@ begin
  end;
 end;
 
-procedure CrLf; assembler;
+procedure CrLf;
+begin
+{$IFDEF CPUI8086}
 asm
   MOV  DL,0DH
   MOV  AH,2
@@ -893,6 +912,10 @@ asm
   MOV  DL,0AH
   MOV  AH,2
   INT  21H
+end;
+{$ELSE}
+  WriteLn;
+{$ENDIF}
 end;
 
 var
@@ -918,6 +941,19 @@ begin
 end;
 {$ENDIF}
 begin
+  if (FindParam('/?') > 0) or (FindParam('/H') > 0) then
+  begin
+    WriteLn('DOS Navigator Open Source (Win32)');
+    WriteLn('Usage: dn [options]');
+    WriteLn('  /?          Display this help message');
+    WriteLn('  /C<file>    Specify configuration file');
+    WriteLn('  /S<dir>     Specify swap directory');
+    WriteLn('  /P<file>    Specify palette file');
+    WriteLn('  /NOXMS      Disable XMS memory');
+    WriteLn('  /NOEMS      Disable EMS memory');
+    Halt(0);
+  end;
+
  if memAvail < 100000 then begin
     WriteLn(#10#13'Not enough memory for Navigator.');
     WriteLn(      'Please check if 400K memory is available');
@@ -926,6 +962,7 @@ begin
  Randomize;
  LoaderSeg := 0;
  LSliceCnt := -3;
+{$IFDEF CPUI8086}
  asm
   mov ax, $9900
   int 2Fh
@@ -956,6 +993,11 @@ begin
   mov  word ptr DDTimer+2, cx
   pop  bp
  end;
+{$ELSE}
+  RunFirst := True;
+  DNNumber := 0;
+  DDTimer := 0;
+{$ENDIF}
 
 
  if DDTimer > 0 then DDTimer := Get100s-DDTimer;
@@ -964,6 +1006,7 @@ begin
 
  DoStartUp;
 
+{$IFDEF CPUI8086}
  asm
    MOV  AH, 03 { Get cursor position }
    MOV  BX, 0  { DL - X }
@@ -993,6 +1036,10 @@ begin
      end
    end
  end;
+{$ELSE}
+ ShiftRec.CurY := 0;
+ ShiftRec.ScrH := ScreenHeight;
+{$ENDIF}
 
 
 {$IFDEF DEBUG} DEBUG.Flash( $4E64 ); {$ENDIF}

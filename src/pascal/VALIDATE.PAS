@@ -219,7 +219,7 @@ const
 
 implementation
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 uses WinTypes, WinProcs, DnStrings;
 {$ELSE}
 uses RStrings, Commands, DNApp, DnMessages;
@@ -307,7 +307,7 @@ begin
   inherited Done;
 end;
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 
 procedure TPXPictureValidator.Error;
 var
@@ -824,7 +824,7 @@ begin
   S.Write(ValidChars, SizeOf(TCharSet));
 end;
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 
 procedure TFilterValidator.Error;
 begin
@@ -856,7 +856,7 @@ begin
   S.Read(Min, SizeOf(Max) + SizeOf(Min));
 end;
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 
 procedure TRangeValidator.Error;
 var
@@ -963,7 +963,7 @@ begin
   inherited Done;
 end;
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 
 procedure TStringLookupValidator.Error;
 begin

@@ -158,6 +158,14 @@ type
 
 function GlobalMemoryStatusEx(var Buffer: TMemoryStatusEx): LongBool; stdcall;
   external 'kernel32' name 'GlobalMemoryStatusEx';
+
+function GetDiskFreeSpaceA(
+  lpRootPathName: PChar;
+  var lpSectorsPerCluster: DWord;
+  var lpBytesPerSector: DWord;
+  var lpNumberOfFreeClusters: DWord;
+  var lpTotalNumberOfClusters: DWord
+): LongBool; stdcall; external 'kernel32' name 'GetDiskFreeSpaceA';
   { stdcall is mandatory here - verified live: without it the call
     compiles but fails at runtime with GetLastError=87
     (ERROR_INVALID_PARAMETER), a calling-convention mismatch under
@@ -539,7 +547,9 @@ begin
   if Abort then CountDirLen := 0;
 end;
 
-procedure GetSpace(Drive : Char);assembler;
+procedure GetSpace(Drive : Char);
+{$IFDEF CPUI8086}
+assembler;
 asm
   mov ax,0
   mov BytPerSec,ax
@@ -558,6 +568,28 @@ asm
   mov SecPerClu,ax
 @ex:
 end;
+{$ELSE}
+var
+  RootPath: array[0..4] of Char;
+  _spc, _bps, _fc, _tc: DWord;
+begin
+  BytPerSec := 0;
+  SecPerClu := 0;
+  TotClu := 0;
+  FreeClu := 0;
+  RootPath[0] := Drive;
+  RootPath[1] := ':';
+  RootPath[2] := '\';
+  RootPath[3] := #0;
+  if GetDiskFreeSpaceA(@RootPath[0], _spc, _bps, _fc, _tc) then
+  begin
+    SecPerClu := Word(_spc);
+    BytPerSec := Word(_bps);
+    if _fc > $FFFF then FreeClu := $FFFF else FreeClu := Word(_fc);
+    if _tc > $FFFF then TotClu := $FFFF else TotClu := Word(_tc);
+  end;
+end;
+{$ENDIF}
 
 procedure GetDrInfo(Drv: Byte);
  var Dr : Char;

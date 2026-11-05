@@ -380,6 +380,9 @@ begin
  EditHistory := PCollection(S.Get);
  ViewHistory := PCollection(S.Get);
 
+ if CmdStrings = nil then
+   CmdStrings := New(PLineCollection, Init(40, 10));
+
  CurString := CmdStrings^.Count;
  StrModified := False;
  if CommandLine <> nil then CommandLine^.DrawView;

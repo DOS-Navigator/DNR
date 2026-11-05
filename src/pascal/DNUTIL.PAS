@@ -1070,6 +1070,7 @@ begin
  SaveHistories;
  HideCommandLine := (CommandLine <> nil) and not CommandLine^.GetState(sfVisible);
  B := $8000 or (Byte(HideCommandLine));
+{$IFDEF CPUI8086}
  asm
    mov ax, $9906
    mov dx, B
@@ -1077,6 +1078,7 @@ begin
    int  2Fh
    pop  BP
  end;
+{$ENDIF}
  inherited Done;
 {$IFDEF Modem}
  SetBlink(StartupData.Unload and osuBlinking <> 0);
@@ -1340,7 +1342,7 @@ begin
     S^.Read(R.A,2 * SizeOf(LongInt));
     Clock^.Locate(R);
     {S^.Read(ArcFlags, 4);}
-    if B then begin TrashCan^.Show; {Lister^.Show;} end;
+    if B and (TrashCan <> nil) then begin TrashCan^.Show; {Lister^.Show;} end;
     If BB then
        begin
          R.Assign(0, Byte( InterfaceData.Options and ouiHideMenu = 0 ), Size.X, Size.Y
@@ -1355,7 +1357,7 @@ begin
       Msg(erDesktopError, nil, mfOkButton + mfError);
     end;
     }
-    if B then begin S^.Read(R.A, 2 * SizeOf(LongInt)); TrashCan^.Locate(R) end;
+    if B and (TrashCan <> nil) then begin S^.Read(R.A, 2 * SizeOf(LongInt)); TrashCan^.Locate(R) end;
   end;
   Desktop^.Redraw;
   GetBounds(R);
@@ -1413,12 +1415,12 @@ begin
     StoreDesktop(S^);
     S^.Write(TempBounds, SizeOf(TempBounds));
     {S^.Write(ArcBounds, SizeOf(TempBounds));}
-    B := TrashCan^.GetState(sfVisible);
+    if TrashCan <> nil then B := TrashCan^.GetState(sfVisible) else B := False;
     S^.Write(B, 1);
     S^.Put(KeyMacroses);
     Clock^.GetBounds(R);
     S^.Write(R.A, 2 * SizeOf(LongInt));
-    TrashCan^.GetBounds(R);
+    if TrashCan <> nil then TrashCan^.GetBounds(R);
     if B then S^.Write(R.A, 2 * SizeOf(LongInt));
     {S^.Write(ArcFlags, 4);}
     if S^.Status <> stOk then
@@ -1619,6 +1621,7 @@ var
   R: TRect;
   WS: Word;
 begin
+{$IFDEF CPUI8086}
   asm
     mov  ax, 9906h
     xor  dx, dx
@@ -1628,6 +1631,9 @@ begin
     pop  bp
     mov  WS, cx
   end;
+{$ELSE}
+  WS := 0;
+{$ENDIF}
   HideCommandLine := (WS and cdnHideCmdLine <> 0);
   DisableCommands(DblWndCommands);
   GetExtent(R);
@@ -1713,10 +1719,10 @@ PROCEDURE TDNApplication.HandleCommand;
     if S = '' then Exit;
     S[1] := Char(Byte(S[1])-64);
    end;
-  if TrashCan^.GetState(sfVisible) then Desktop^.Delete(TrashCan);
+  if TrashCan <> nil then if TrashCan^.GetState(sfVisible) then Desktop^.Delete(TrashCan);
   P := New(PXDoubleWindow, Init(R, 0, Byte(S[1])));
   if Abort then Dispose(P, Done) else InsertWindow(PWindow(P));
-  if TrashCan^.GetState(sfVisible) then Desktop^.Insert(TrashCan);
+  if TrashCan <> nil then if TrashCan^.GetState(sfVisible) then Desktop^.Insert(TrashCan);
  end;
 
 
@@ -2054,7 +2060,7 @@ PROCEDURE TDNApplication.HandleCommand;
       CE;
     end;
 begin
-   ST := PString(Event.InfoPtr)^;
+   if Event.InfoPtr <> nil then ST := PString(Event.InfoPtr)^ else ST := '';
    case Event.Command of
      cmFirstTimePanel: OpenWindow( False );
      cmPutInClipboard: PutInClip;
@@ -2125,9 +2131,10 @@ begin
      cmStartup: StartupSetup;
      cmSetupMouse: MouseSetup;
      cmSaversSetup: SaversSetup;
-     cmHideShowTools: if TrashCan^.GetState(sfVisible)
-                        then TrashCan^.Hide
-                        else TrashCan^.Show;
+     cmHideShowTools: if TrashCan <> nil then
+                        if TrashCan^.GetState(sfVisible)
+                          then TrashCan^.Hide
+                          else TrashCan^.Show;
      cmReanimator: if (SystemData.Drives[ GetCurDrive ] and ossDirectAccess <> 0)  and CheckDisk(GetCurDrive)
                      then OpenReanimator
                      else Denie;

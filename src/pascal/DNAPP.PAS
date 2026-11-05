@@ -787,6 +787,7 @@ begin
      (CommandLine^.GetState(sfVisible)) then
   begin
     IdleWas := False;
+{$IFDEF CPUI8086}
     asm
      mov ah,3
      xor bx,bx
@@ -794,6 +795,9 @@ begin
      mov A1, dx
      mov A2, cx
     end;
+{$ELSE}
+    A1 := 0; A2 := 0;
+{$ENDIF}
     if ((Hi(A2) = $20) or (Hi(A1) = Size.Y - 1 - Byte( InterfaceData.Options and ouiHideStatus = 0 )))
        then CommandLine^.Update;
   end;
@@ -837,6 +841,9 @@ procedure TProgram.Idle;
      A1, A2: Word;
  label 1;
 begin
+{ CPUI8086}
+  SliceYield;
+{}
   if StatusLine <> nil then StatusLine^.Update;
   if CommandSetChanged then
   begin
@@ -971,6 +978,7 @@ begin
             ScreenWidth, ScreenHeight     - Byte(InterfaceData.Options and ouiHideStatus = 0));
    if CommandLine <> nil then CommandLine^.Locate(R);
    ShowMouse;
+{$IFDEF CPUI8086}
    asm
      mov ah, 1
      xor bx, bx
@@ -979,6 +987,7 @@ begin
      int 10h
      pop bp
    end;
+{$ENDIF}
    CursorLines := $607;
    SetBlink(CurrentBlink);
 end;
@@ -1038,6 +1047,7 @@ begin
  GetExtent(R);
  PV := New(PBackground, Init(R, ' '));
  if CommandLine <> nil then CommandLine^.SetState(sfDisabled, On);
+{$IFDEF CPUI8086}
  asm
     mov cx, $2020
     xor bx, bx
@@ -1046,6 +1056,7 @@ begin
     int 10h
     pop  bp
  end;
+{$ENDIF}
  Insert(PV);
  WhenShow;
  if CommandLine <> nil then CommandLine^.SetState(sfDisabled, Off);
