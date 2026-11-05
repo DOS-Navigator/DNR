@@ -2,9 +2,14 @@
 
 [![Platform: Windows (x86 32-bit)](https://img.shields.io/badge/platform-Windows%20x86--32-blue.svg)](https://github.com/DOS-Navigator/DNR)
 [![Compiler: Free Pascal 3.2.2](https://img.shields.io/badge/compiler-Free%20Pascal%203.2.2-green.svg)](https://www.freepascal.org/)
+[![Build and Release](https://github.com/DOS-Navigator/DNR/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/DOS-Navigator/DNR/actions/workflows/build-and-release.yml)
 [![License: Open Source](https://img.shields.io/badge/license-Open%20Source-orange.svg)](https://github.com/DOS-Navigator/DNR)
 
 **DOS Navigator Revived (DNR)** is an ongoing engineering initiative modernizing the legendary **DOS Navigator** file manager and desktop work environment (originally created by Stefan Tanurkov, Dmitry Dotsenko, Andrew Zabolotny, and RIT Research Labs) into a native, modern, 32-bit Windows console application using exclusively Free and Open Source Software (FPC and NASM).
+
+<p align="center">
+  <img src="docs/images/dn_showcase.png" alt="DOS Navigator Native Win32 Console TUI" width="850">
+</p>
 
 ---
 
