@@ -48,11 +48,12 @@
 {$I DN.DEF}
 
 unit Phones;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
 uses xTime, Objects, DNApp, Drivers, Dialogs, Menus, Views, DNStdDlg, RStrings
-     ,DNHelp, Advance, Messages, ObjType;
+     ,DNHelp, Advance, DnMessages, ObjType;
 
 type {TMyApp = object(TApplication)
        procedure Idle; virtual;
@@ -157,7 +158,7 @@ const
 
       RAutoDialer: TStreamRec = (
        ObjType: otAutoDialer;
-       VmtLink: Ofs(TypeOf(TAutoDialer)^);
+       VmtLink: TypeOf(TAutoDialer);
        Load: @TAutoDialer.Load;
        Store: @TAutoDialer.Store);
 {$ENDIF}
@@ -165,31 +166,31 @@ const
 const
       RDialBox: TStreamRec = (
        ObjType: otDialBox;
-       VmtLink: Ofs(TypeOf(TDialBox)^);
+       VmtLink: TypeOf(TDialBox);
        Load: @TDialBox.Load;
        Store: @TDialBox.Store);
 
       RDStringView: TStreamRec = (
        ObjType: otDStringView;
-       VmtLink: Ofs(TypeOf(TDStringView)^);
+       VmtLink: TypeOf(TDStringView);
        Load: @TDStringView.Load;
        Store: @TDStringView.Store);
 
       RPhone: TStreamRec = (
        ObjType: otPhone;
-       VmtLink: Ofs(TypeOf(TPhone)^);
+       VmtLink: TypeOf(TPhone);
        Load: @TPhone.Load;
        Store: @TPhone.Store);
 
       RPhoneDir: TStreamRec = (
        ObjType: otPhoneDir;
-       VmtLink: Ofs(TypeOf(TPhoneDir)^);
+       VmtLink: TypeOf(TPhoneDir);
        Load: @TPhoneDir.Load;
        Store: @TPhoneDir.Store);
 
       RPhoneCollection: TStreamRec = (
        ObjType: otPhoneCollection;
-       VmtLink: Ofs(TypeOf(TPhoneCollection)^);
+       VmtLink: TypeOf(TPhoneCollection);
        Load: @TPhoneCollection.Load;
        Store: @TPhoneCollection.Store);
 

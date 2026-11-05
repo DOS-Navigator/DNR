@@ -6,6 +6,7 @@
 (***********************************************************************)
 
 unit xTime;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -40,8 +41,20 @@ function ElapsedTimeInSecs(ET : TEventTimer) : LongInt;
 
 procedure DelayTics(Tics : LongInt);
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Exported so other units (FORMAT.PAS) can reuse the Win32 substitute
+  instead of re-deriving their own - the original i8086/TP BiosTics was
+  never exported (a private implementation var), and callers there
+  either declare their own local copy or don't need one at all. }
+function BiosTics: LongInt;
+{$ENDIF}
 
-implementation uses Dos;
+implementation
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses Dos, Windows;
+{$ELSE}
+uses Dos;
+{$ENDIF}
 type
   DayType = (Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday);
 
@@ -80,8 +93,16 @@ const
 
   TicsPerDay = 1573040;      {Assumes 18.20648 tics/sec}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function BiosTics: LongInt;
+begin
+  BiosTics := LongInt((Int64(GetTickCount64) * TicsFreq)
+                       div (Int64(SecsFreq) * 1000)) mod TicsPerDay;
+end;
+{$ELSE}
 var
   BiosTics : LongInt absolute $40:$6C;
+{$ENDIF}
 
 
 

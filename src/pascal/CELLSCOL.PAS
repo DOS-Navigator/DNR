@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit CellsCol;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -78,7 +79,7 @@ type
 const
     RCellCollection: TStreamRec = (
        ObjType: otCellCollection;
-       VmtLink: Ofs(TypeOf(TCellCollection)^);
+       VmtLink: TypeOf(TCellCollection);
        Load:    @TCellCollection.Load;
        Store:   @TCellCollection.Store
       );

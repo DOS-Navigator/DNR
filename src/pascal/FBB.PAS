@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 UNIT FBB;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Dos;
@@ -52,7 +53,7 @@ uses Dos;
  Function LongCopy(fn1: PathStr): Boolean;
 
 implementation
-uses Advance, FileCopy, DNApp, Messages, Views, Objects, Dialogs, Commands,
+uses Advance, FileCopy, DNApp, DnMessages, Views, Objects, Dialogs, Commands,
      Drivers, Memory, FilesCol, DiskTool, RStrings, HistList, Gauge,
      StartUp, DNutil, xTime, DiskInfo;
 
@@ -72,10 +73,18 @@ uses Advance, FileCopy, DNApp, Messages, Views, Objects, Dialogs, Commands,
      FreeSpc : TSize;
      Timer: TEventTimer;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ function MaxAvail: LongInt;
+ begin
+   { Memory.MaxAvail, not System's (win32 has neither) }
+   MaxAvail := MemAdjust(Memory.MaxAvail);
+ end;
+{$ELSE}
  function MaxAvail: LongInt;
  begin
    MaxAvail := MemAdjust(System.MaxAvail);
  end;
+{$ENDIF}
 
  procedure GetMaxMem;
   var l : LongInt;

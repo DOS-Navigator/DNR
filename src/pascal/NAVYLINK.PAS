@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit NavyLink;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {$I LINK.INC} interface uses
   Advance, Dos, Objects, Views, Drives, Drivers,
@@ -108,13 +109,13 @@ type
 const
       RLinker: TStreamRec = (
        ObjType: otLinker;
-       VmtLink: Ofs(TypeOf(TLinker)^);
+       VmtLink: TypeOf(TLinker);
        Load: @TLinker.Load;
        Store: @TLinker.Store);
 
       RLinkDrive: TStreamRec = (
        ObjType: otLinkDrive;
-       VmtLink: Ofs(TypeOf(TLinkDrive)^);
+       VmtLink: TypeOf(TLinkDrive);
        Load: @TLinkDrive.Load;
        Store: @TLinkDrive.Store);
 
@@ -133,7 +134,7 @@ implementation
 uses  {$IFDEF CL_LOG} ComLnk, {$ENDIF}
   Dialogs,
   LinkTyp, FlPanel, Memory, ApPort,
-  OOCom, ModemIO, Commands, DNApp, Messages, DnHelp, FileCopy,
+  OOCom, ModemIO, Commands, DNApp, DnMessages, DnHelp, FileCopy,
   ApMisc, LinkUtil, Startup, Eraser;
 
 

@@ -1,9 +1,15 @@
 UNIT CCalc;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses Advance, Par, RStrings, DNApp, Dialogs, Views, Objects,
+     Drivers, Commands, HistList, DNHelp, ObjType, Memory;
+{$ELSE}
 uses Advance, Par, RStrings, DNApp, Dialogs, Views, Objects,
      Drivers, Commands, HistList, DNHelp, ObjType;
+{$ENDIF}
 
 type
      Real  =  Extended;
@@ -32,13 +38,13 @@ type
 const
       RCalcLine: TStreamRec = (
        ObjType: otCalcLine;
-       VmtLink: Ofs(TypeOf(TCalcLine)^);
+       VmtLink: TypeOf(TCalcLine);
        Load: @TCalcLine.Load;
        Store: @TCalcLine.Store);
 
       RIndicator: TStreamRec = (
        ObjType: otIndicator;
-       VmtLink: Ofs(TypeOf(TIndicator)^);
+       VmtLink: TypeOf(TIndicator);
        Load: @TIndicator.Load;
        Store: @TIndicator.Store);
 

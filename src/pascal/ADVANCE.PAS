@@ -48,6 +48,9 @@
 {$A-,B-}
 
 UNIT Advance;
+{$J+}
+
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 INTERFACE
 
@@ -291,7 +294,11 @@ const
          x_x     : string[3] = '*.*';
 
 var
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+    ShiftState: Byte;
+{$ELSE}
     ShiftState: Byte absolute $40:$17;
+{$ENDIF}
     Abort : Boolean;
     DOS40 : Boolean;
     OS210 : Boolean;
@@ -362,11 +369,82 @@ procedure StartOS2Session(DataLen: Word; Session: Sessiontype; Background: Boole
                           Title, Name, Args, IcoName: string);
 procedure RunOS2Command(Command: string; Bckg: Boolean; Session: SessionType);
 function  GetDateTime(Time: Boolean): string;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Live replacement for the BIOS keyboard-flags byte ShiftState used
+  to mirror automatically. kbInsState and the individual
+  kbLeftShift/kbRightShift bits are always 0 here - grep confirms
+  nothing in this tree tests them, and Win32 has no equivalent of
+  BIOS-tracked "insert mode" toggle state to report for the former. }
+function QueryShiftState: Byte;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Live replacement for the SECOND BIOS keyboard-flags byte at
+  0040:0018 (distinct address from ShiftState/QueryShiftState above,
+  which is 0040:0017) - bits 0-3 distinguish Left/Right Ctrl/Alt
+  specifically, bits 4-7 are the physical key-down state (not the
+  toggle state) for Scroll/Num/Caps Lock and Insert. }
+function QueryExtendedShiftState: Byte;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ Live replacement for `memw[$40:$1C] := memw[$40:$1A]` (BIOS
+  keyboard-buffer tail := head, i.e. discard queued type-ahead) -
+  discards any keystrokes the console has buffered but not yet
+  delivered. }
+procedure FlushKbdBuffer;
+{$ENDIF}
 
 IMPLEMENTATION
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses xTime, Windows, Memory;
+{$ELSE}
 uses xTime;
+{$ENDIF}
 
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function QueryShiftState: Byte;
+var
+  S: Byte;
+begin
+  S := 0;
+  if GetKeyState(VK_RSHIFT) and $8000 <> 0 then S := S or kbRightShift;
+  if GetKeyState(VK_LSHIFT) and $8000 <> 0 then S := S or kbLeftShift;
+  if GetKeyState(VK_CONTROL) and $8000 <> 0 then S := S or kbCtrlShift;
+  if GetKeyState(VK_MENU) and $8000 <> 0 then S := S or kbAltShift;
+  if GetKeyState(VK_SCROLL) and $0001 <> 0 then S := S or kbScrollState;
+  if GetKeyState(VK_NUMLOCK) and $0001 <> 0 then S := S or kbNumState;
+  if GetKeyState(VK_CAPITAL) and $0001 <> 0 then S := S or kbCapsState;
+  QueryShiftState := S;
+end;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function QueryExtendedShiftState: Byte;
+var
+  S: Byte;
+begin
+  S := 0;
+  if GetKeyState(VK_LCONTROL) and $8000 <> 0 then S := S or 1;
+  if GetKeyState(VK_LMENU) and $8000 <> 0 then S := S or 2;
+  if GetKeyState(VK_RCONTROL) and $8000 <> 0 then S := S or 4;
+  if GetKeyState(VK_RMENU) and $8000 <> 0 then S := S or 8;
+  if GetKeyState(VK_SCROLL) and $8000 <> 0 then S := S or $10;
+  if GetKeyState(VK_NUMLOCK) and $8000 <> 0 then S := S or $20;
+  if GetKeyState(VK_CAPITAL) and $8000 <> 0 then S := S or $40;
+  if GetKeyState(VK_INSERT) and $8000 <> 0 then S := S or $80;
+  QueryExtendedShiftState := S;
+end;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure FlushKbdBuffer;
+begin
+  FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+end;
+{$ENDIF}
 
  function GetDateTime(Time: Boolean): string;
   var S: string[30];
@@ -410,7 +488,8 @@ uses xTime;
 
  procedure Beep;
 
- procedure Twf(a,b : Word);assembler;
+ {$IFDEF CPUI8086}
+procedure Twf(a,b : Word);assembler;
  asm
          cli
          mov dx,60
@@ -431,6 +510,11 @@ uses xTime;
          jnz @L0
          sti
  end;
+{$ELSE}
+procedure Twf(a,b : Word);
+begin
+end;
+{$ENDIF}
 
  begin
   case N of
@@ -444,21 +528,12 @@ uses xTime;
 
 procedure MakeDate;
 
- procedure GetDig(R: Byte; var S); assembler;
- asm
-   les bx, S
-{   mov byte ptr es:[bx], 2}
-   mov al, R
-   xor ah,ah
-   mov cx, 10
-   div cl
-   add al, 48
-   add ah, 48
-   cmp al, 48
-   jnz  @@1
-   mov al, '0'
-  @@1:
-   mov es:[bx], ax
+ procedure GetDig(R: Byte; var S);
+ { Was asm: writes the two ASCII digits of R (0..99) at S. }
+ type TB2 = array[0..1] of Char;
+ begin
+   TB2(S)[0] := Chr(48 + R div 10);
+   TB2(S)[1] := Chr(48 + R mod 10);
  end;
 
 begin
@@ -599,38 +674,17 @@ begin
     else GetExt:=Copy(s,i,length(s)-i)
 end;
 
-Function LowCase(c : Char) : Char;assembler;
-label LocEx;
-asm
-   mov al,c
-   cmp al,65
-   jc  LocEx
-   cmp al,91
-   jnc LocEx
-   xor al,$20
-LocEx:
+Function LowCase(c : Char) : Char;
+begin
+  if (c >= 'A') and (c <= 'Z') then LowCase := Chr(Ord(c) + 32)
+  else LowCase := c;
 end;
 
-Procedure LowStr(var s : string);assembler;
-label NextChar,NoLow,LocExit;
-asm
-   les  bx,s
-   mov  ch,0
-   mov  cl, [es:bx]
-   inc  bx
-   jcxz LocExit
-NextChar:
-   mov  al, [es:bx]
-   cmp  al,65
-   jc   NoLow
-   cmp  al,91
-   jnc  NoLow
-   xor  al,$20
-   mov  [es:bx], al
-NoLow:
-   inc  bx
-   loop NextChar
-LocExit:
+Procedure LowStr(var s : string);
+var I: Integer;
+begin
+  for I := 1 to Length(s) do
+    if (s[I] >= 'A') and (s[I] <= 'Z') then s[I] := Chr(Ord(s[I]) + 32);
 end;
 
 
@@ -640,77 +694,30 @@ begin
  LowStrg:=s;
 end;
 
-Procedure UpStr(var s : string);assembler;
-label NextChar,NoLow,LocExit;
-asm
-   les  bx,s
-   mov  ch,0
-   mov  cl, [es:bx]
-   inc  bx
-   jcxz LocExit
-NextChar:
-   mov  al, [es:bx]
-   cmp  al,'a'
-   jc   NoLow
-   cmp  al,'z'+1
-   jnc  NoLow
-   xor  al,$20
-   mov  [es:bx], al
-NoLow:
-   inc  bx
-   loop NextChar
-LocExit:
+Procedure UpStr(var s : string);
+var I: Integer;
+begin
+  for I := 1 to Length(s) do
+    if (s[I] >= 'a') and (s[I] <= 'z') then s[I] := Chr(Ord(s[I]) - 32);
 end;
 
-Function UpStrg(const s : string) : string; assembler;
-label NextChar,NoLow,LocExit;
-asm
-   cld
-   push ds
-   lds  si,s
-   les  di, @Result
-   lodsb
-   stosb
-   mov  cl,al
-   mov  ch,0
-   jcxz LocExit
-NextChar:
-   lodsb
-   cmp  al,'a'
-   jc   NoLow
-   cmp  al,'z'+1
-   jnc  NoLow
-   xor  al,$20
-NoLow:
-   stosb
-   loop NextChar
-LocExit:
-   pop  ds
+Function UpStrg(const s : string) : string;
+var R: string; I: Integer;
+begin
+  R := s;
+  for I := 1 to Length(R) do
+    if (R[I] >= 'a') and (R[I] <= 'z') then R[I] := Chr(Ord(R[I]) - 32);
+  UpStrg := R;
 end;
 
-procedure DelSpace; assembler;
-asm
-  les bx, S
-  xor ch, ch
-  mov cl, es:[bx]
-  jcxz @@1
-  mov  di, 1
-  mov  si, 1
-  xor  al, al
-  mov  es:[bx], al
-@@2:
-  mov  al, es:[bx][di]
-  cmp  al, ' '
-  jz   @@3
-  cmp  al, 9
-  jz   @@3
-  mov  es:[bx][si], al
-  inc  byte ptr es:[bx]
-  inc  si
-@@3:
-  inc  di
-  loop @@2
-@@1:
+procedure DelSpace;
+{ Removes every space and tab from S in place. }
+var I: Integer; R: string;
+begin
+  R := '';
+  for I := 1 to Length(S) do
+    if (S[I] <> ' ') and (S[I] <> #9) then R := R + S[I];
+  S := R;
 end;
 
 
@@ -732,24 +739,26 @@ begin
  MakeFileName := S;
 end;
 
-Function Strg; assembler;
-asm
-  les  di, @Result
-  mov  al, Num
-  stosb
-  mov  ch, 0
-  mov  cl, al
-  mov  al, c
-  rep  stosb
+Function Strg;
+{ Returns Num copies of c. }
+var R: string;
+begin
+  R[0] := Chr(Num);
+  if Num > 0 then FillChar(R[1], Num, c);
+  Strg := R;
 end;
 
-Procedure SetBlink(Mode : boolean); assembler;
+Procedure SetBlink(Mode : boolean);
+begin
+{$IFDEF CPUI8086}
 asm
       MOV  AX,1003H
       MOV  BL,Mode
       push bp
       INT  10h
       pop  bp
+end;
+{$ENDIF}
 end;
 
 Function  ItoS(a:longint):string;
@@ -782,54 +791,27 @@ end;
 
 Function  FStr(a:TSize):string;
  var s,s1 : string[40];
-     s1l: byte absolute s1;
-     i : Integer;
+     i, count : Integer;
      C: Char;
 begin
  Str(A:0:0, S);
- if CountryInfo.ThouSep[0] > #0 then
+ if (CountryInfo.ThouSep[0] > #0) and (Length(S) > 0) then
    begin
       C := CountryInfo.ThouSep[1];
-      asm
-       lea si, s
-       lea di, s1
-       mov bx, di
-       mov al, ss:[si]
-       xor ah, ah
-       mov cx, 3
-       div cl
-       mov byte ptr ss:[bx], 0
-       mov cl, ss:[si]
-       mov dl, ah
-       Mov al, C
-       or  dl, dl
-       jnz @@1
-       mov dl, 3
-      @@1:
-       or  cl, cl
-       jz  @@3
-      @@2:
-       mov ah, ss:[si+1]
-       mov byte ptr ss:[di+1], ah
-       inc byte ptr ss:[bx]
-       inc di
-       inc si
-       dec cl
-       jz  @@3
-       dec dl
-       jnz @@2
-       mov dl, 3
-       mov byte ptr ss:[di+1], al
-       inc di
-       inc byte ptr ss:[bx]
-       jmp @@2
-      @@3:
+      s1 := '';
+      count := 0;
+      for i := Length(S) downto 1 do
+      begin
+        if (count > 0) and (count mod 3 = 0) then
+          s1 := C + s1;
+        s1 := S[i] + s1;
+        Inc(count);
       end;
    end else S1 := S;
  if Length(S1)>12 then
  begin
-   Dec(s1l,3);
-   s1[s1l] := 'K';
+   SetLength(s1, Length(s1) - 3);
+   s1[Length(s1)] := 'K';
  end;
  FStr:=s1;
 end;
@@ -849,18 +831,20 @@ begin
  s[0]:=#8; Hex8Lo(a,s[1]); Hex8 := s;
 end;
 
-Function HexChar(a : byte) : char; assembler;
-label Loc1;
-asm
-   mov al,a
-   and al,0Fh
-   add al,'0'
-   cmp al,58
-   jc  Loc1
-   add al,7
-Loc1:
+Function HexChar(a : byte) : char;
+begin
+  a := a and $0F;
+  if a < 10 then HexChar := Chr(Ord('0') + a)
+  else HexChar := Chr(Ord('A') + a - 10);
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ No Win32 console equivalent - no raw VGA text-mode font RAM to
+  reach, and nothing outside this file calls this. }
+Procedure DefineChar(n : Integer;var a);
+begin
+end;
+{$ELSE}
 Procedure DefineChar(n : Integer;var a);
 begin
  PortW[$3C4]:=$0402;
@@ -875,7 +859,14 @@ begin
  PortW[$3CE]:=$0E06;
  PortW[$3CE]:=$0004;
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+Procedure GetDChar(n : Integer;var a);
+begin
+  FillChar(a, 16, 0);
+end;
+{$ELSE}
 Procedure GetDChar(n : Integer;var a);
 begin
  PortW[$3C4]:=$0402;
@@ -890,6 +881,7 @@ begin
  PortW[$3CE]:=$0E06;
  PortW[$3CE]:=$0004;
 end;
+{$ENDIF}
 
 Procedure ClrIO;
 begin
@@ -947,6 +939,12 @@ FUNCTION Min; begin if x<y then Min:=X else Min:=Y end;
 FUNCTION Max; begin if x<y then Max:=Y else Max:=X end;
 FUNCTION Sgn; begin if x>0 then Sgn:=1 else if x<0 then Sgn:=-1 else Sgn:=0 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+PROCEDURE DosWrite( S: string );
+begin
+  System.Write(S);
+end;
+{$ELSE}
 PROCEDURE DosWrite;assembler;
 asm
   les  di,S
@@ -967,23 +965,15 @@ asm
   loop @loop
 @empty:
 end;
+{$ENDIF}
 
-FUNCTION  PosChar; assembler;
-asm
-  les di,S
-  xor ch,ch
-  mov cl,byte ptr es:[di]
-  mov bx,cx
-  inc di
-  cld
-  mov al,C
-  repne scasb
-  jnz @S
-  sub bx,cx
-  mov al,bl
-  jmp @Q
-@S:xor al,al
-@Q:
+FUNCTION  PosChar;
+{ Position of C in S, 0 when absent. }
+var I: Integer;
+begin
+  PosChar := 0;
+  for I := 1 to Length(S) do
+    if S[I] = C then begin PosChar := I; Exit; end;
 end;
 
 
@@ -1075,33 +1065,13 @@ end;
 
 
 
-FUNCTION AddSpace(const s:string; N:byte):string; assembler;
-asm
-   cld
-   push  ds
-   lds   si, s
-   les   di, @Result
-   lodsb
-   mov   ah, N
-   mov   ch, 0
-   cmp   al, ah
-   jae   @JustCopy
-   mov   [es:di], ah
-   inc   di
-   mov   cl, al
-   rep   movsb
-   sub   ah, al
-   mov   al, ' '
-   mov   cl, ah
-   rep   stosb
-   jmp   @End
-
-@JustCopy:
-   stosb
-   mov  cl, al
-   rep movsb
-@End:
-   pop  ds
+FUNCTION AddSpace(const s:string; N:byte):string;
+{ Pads s with trailing spaces to length N; longer strings pass unchanged. }
+var R: string;
+begin
+  R := s;
+  while Length(R) < N do R := R + ' ';
+  AddSpace := R;
 end;
 
 FUNCTION PredSpace;
@@ -1124,6 +1094,20 @@ begin s:=''; for c:=1 to 4 do begin
 end;
 
 function ValidDrive(dr : char) : Boolean;
+{$IFNDEF CPUI8086}
+var
+  Drives: LongWord;
+  Shift: Integer;
+begin
+  ValidDrive := False;
+  dr := UpCase(dr);
+  if not (dr in ['A'..'Z']) then Exit;
+  Shift := Ord(dr) - Ord('A');
+  Drives := Windows.GetLogicalDrives;
+  ValidDrive := (Drives and (1 shl Shift)) <> 0;
+end;
+{$ELSE}
+
 var s,s1 : string[40];
     B,B1: Byte;
 begin
@@ -1158,7 +1142,9 @@ begin
     mov  [bp-1],al
  end;
 end;
+{$ENDIF}
 
+{$IFDEF CPUI8086}
 function DumpStr;
  var S: string;
 
@@ -1303,6 +1289,34 @@ begin
  end;
  DumpStr := S;
 end;
+{$ELSE}
+function DumpStr(var B; Addr: LongInt; Count: Integer; Filter: Byte): string;
+var
+  HexDigits: array[0..15] of Char;
+  Bytes: array[0..255] of Byte absolute B;
+  i: Integer;
+  bval: Byte;
+  c: Char;
+  HexPart, AscPart: string;
+begin
+  HexDigits := '0123456789ABCDEF';
+  if Count <= 0 then begin DumpStr := ''; Exit; end;
+  HexPart := Hex8(Addr) + ': ';
+  AscPart := '';
+  for i := 0 to Count - 1 do
+  begin
+    bval := Bytes[i];
+    HexPart := HexPart + HexDigits[bval shr 4] + HexDigits[bval and $0F] + ' ';
+    if bval = 0 then c := '.'
+    else if Filter = 0 then c := Chr(bval)
+    else if bval < 32 then c := #250
+    else if (Filter = 1) and (bval >= 128) then c := #250
+    else c := Chr(bval);
+    AscPart := AscPart + c;
+  end;
+  DumpStr := HexPart + #179' ' + AscPart;
+end;
+{$ENDIF}
 
 procedure InitUpcase; near;
  var C: Char;
@@ -1321,83 +1335,38 @@ begin
 end;
 
 function UpCaseStr(S: string): string;
+var i: Integer;
 begin
- asm
-  cmp UpcaseInit, 0
-  jnz @@@1
-  call InitUpcase
-@@@1:
-  lea si, UpCaseArray
-  lea di, S
-  mov cl, ss:[di]
-  xor ch, ch
-  xor bh, bh
-  or  cl, cl
-  jz  @Exit
-@@1:
-  inc di
-  mov al, ss:[di]
-  or al, al
-  jz @@2
-  mov bl, al
-  mov al, ds:[bx+si]
-  mov ss:[di], al
-@@2:
-  loop @@1
-@Exit:
- end;
- UpCaseStr := S;
+  if not UpcaseInit then InitUpcase;
+  for i := 1 to Length(S) do
+    S[i] := UpCaseArray[S[i]];
+  UpCaseStr := S;
 end;
 
 function LowCaseStr(S: string): string;
+var i: Integer;
 begin
- asm
-  cmp UpcaseInit, 0
-  jnz @@@1
-  call InitUpcase
-@@@1:
-  lea si, LowCaseArray
-  lea di, S
-  mov cl, ss:[di]
-  xor ch, ch
-  xor bh, bh
-  or  cl, cl
-  jz  @Exit
-@@1:
-  inc di
-  mov al, ss:[di]
-  or al, al
-  jz @@2
-  mov bl, al
-  mov al, ds:[bx+si]
-  mov ss:[di], al
-@@2:
-  loop @@1
-@Exit:
- end;
- LowCaseStr := S;
+  if not UpcaseInit then InitUpcase;
+  for i := 1 to Length(S) do
+    S[i] := LowCaseArray[S[i]];
+  LowCaseStr := S;
 end;
 
 const LastCase: Byte = 2;
 var  Tran: array[Char] of Char;
 
 procedure MakeCase(CaseSensitive: Boolean);
+var i: Integer;
 begin
- if not UpcaseInit then InitUpcase;
- if Byte(CaseSensitive) <> LastCase then
- if CaseSensitive then
-  asm
-   lea bx, Tran
-   add bx, 255
-   mov cx, 256
-@@1:
-   mov ax, cx
-   dec ax
-   mov ds:[bx], al
-   dec bx
-   loop @@1
-  end else Move(UpCaseArray, Tran, 256);
-  LastCase := Byte(CaseSensitive);
+  if not UpcaseInit then InitUpcase;
+  if Byte(CaseSensitive) <> LastCase then
+  begin
+    if CaseSensitive then
+      for i := 0 to 255 do Tran[Char(i)] := Char(i)
+    else
+      Move(UpCaseArray, Tran, 256);
+    LastCase := Byte(CaseSensitive);
+  end;
 end;
 
 function SearchFor;
@@ -1411,46 +1380,11 @@ begin
  SearchFor := 0;
  if S = '' then Exit;
  MakeCase(CaseSensitive);
- asm
-  lea di, D
-  mov ax, ss
-  mov es, ax
-  mov cx, 256
-  lea bx, S
-  mov al, ss:[bx]
-  xor ah, ah
-  cld
-  rep stosw
-  mov dx, ax
-  mov cx, ax
-  lea bx, Tran
-  lea si, S
-@@@2:
-  inc si
-  mov al, ss:[si]
-  push bx
-  add bx, ax
-  mov al, ds:[bx]
-  pop bx
-  mov ss:[si], al
-  loop @@@2
-  mov cx, dx
-  lea si, D
-  lea bx, S
-@@@1:
-  inc bx
-  dec dx
-  mov al, ss:[bx]
-  xor ah, ah
-  add ax, ax
-  push si
-  add si, ax
-  mov ss:[si], dx
-  pop si
-  loop @@@1
- end;
- M := Length(S) - 1;
+ FillWord(D, 256, Length(S));
  for I := 1 to Length(S) do S[I] := Tran[S[I]];
+ for I := 1 to Length(S) - 1 do
+   D[S[I]] := Length(S) - I;
+ M := Length(S) - 1;
  while M < L do
   begin
    C := Tran[ChBuf[M]];
@@ -1499,6 +1433,64 @@ begin
 end;
 
 
+{$IFNDEF CPUI8086}
+FUNCTION GetDrive : byte;
+var S: string;
+begin
+  GetDir(0, S);
+  if Length(S) > 0 then GetDrive := Byte(UpCase(S[1])) - 65 else GetDrive := 2;
+end;
+
+PROCEDURE SetDrive(a : byte);
+var S: string[3];
+begin
+  S := Chr(a + 65) + ':';
+  {$I-} System.ChDir(S); {$I+} InOutRes := 0;
+end;
+
+function KeyPressed: Boolean;
+var
+  H: Windows.THandle;
+  NumEvents: Windows.DWORD;
+  Recs: array[0..15] of Windows.TInputRecord;
+  NumRead: Windows.DWORD;
+  I: Integer;
+begin
+  KeyPressed := False;
+  H := Windows.GetStdHandle(Windows.STD_INPUT_HANDLE);
+  if not Windows.GetConsoleMode(H, NumEvents) then
+    H := Windows.CreateFileA('CONIN$', Windows.GENERIC_READ or Windows.GENERIC_WRITE,
+      Windows.FILE_SHARE_READ or Windows.FILE_SHARE_WRITE, nil, Windows.OPEN_EXISTING, 0, 0);
+  if (H = 0) or (H = Windows.INVALID_HANDLE_VALUE) then Exit;
+  NumEvents := 0;
+  if not Windows.GetNumberOfConsoleInputEvents(H, NumEvents) then Exit;
+  if NumEvents = 0 then Exit;
+  if NumEvents > 16 then NumEvents := 16;
+  if not Windows.PeekConsoleInputA(H, Recs[0], NumEvents, NumRead) then Exit;
+  for I := 0 to Integer(NumRead) - 1 do
+  begin
+    if (Recs[I].EventType = Windows.KEY_EVENT) and (Recs[I].Event.KeyEvent.bKeyDown) then
+    begin
+      KeyPressed := True;
+      Exit;
+    end;
+  end;
+end;
+
+function GetCurDrive: Char;
+var S: string;
+begin
+  GetDir(0, S);
+  if Length(S) > 0 then GetCurDrive := UpCase(S[1]) else GetCurDrive := 'C';
+end;
+
+procedure SetCurDrive(C: Char);
+var S: string[3];
+begin
+  S := UpCase(C) + ':';
+  {$I-} System.ChDir(S); {$I+} InOutRes := 0;
+end;
+{$ELSE}
 FUNCTION GetDrive : byte; assembler; asm mov ah,$19; int 21h; end;
 PROCEDURE SetDrive(a : byte); assembler; asm mov ah,$0E; mov dl,a; int $21; end;
 
@@ -1511,7 +1503,6 @@ asm
  xor ax,ax
 @@1:
 end;
-
 
 function GetCurDrive; assembler;
 asm
@@ -1528,12 +1519,17 @@ asm
  sub dl, 65
  int 21h
 end;
+{$ENDIF}
 
 procedure EraseByName;
 var
   F: file;
 begin
-  Assign(F, FName); Erase(F);
+  {$I-}
+  Assign(F, FName);
+  Erase(F);
+  {$I+}
+  InOutRes := 0;
 end;
 
 procedure EraseFile;
@@ -1542,18 +1538,22 @@ begin
   ClrIO;
   FileMode := $42;
   Assign(F, N);
+  {$I-}
   Erase(F);
   case IOResult of
     5 : begin
           SetFAttr(F, Archive);
           Erase(F);
         end;
+{$IFDEF CPUI8086}
    19 : asm;
           mov  ah,0dh { Reset Disks }
           int  21h
         end;
+{$ENDIF}
   end;
   ClrIO;
+  {$I+}
 end;
 
 FUNCTION MakeNormName(S, S1: string): string;
@@ -1594,18 +1594,10 @@ begin
   LongRatio := 100 * X div Y;
 end;
 
-Function XDiv1024; assembler;
-asm
-  mov ax,word ptr X
-  mov dx,word ptr X + 2
-  mov al,ah
-  mov ah,dl
-  mov dl,dh
-  xor dh,dh
-  shr dx,1
-  rcr ax,1
-  shr dx,1
-  rcr ax,1
+Function XDiv1024;
+{ Was a 32-bit logical right shift by 10 done in DX:AX. }
+begin
+  XDiv1024 := X shr 10;
 end;
 
 Function FileSizeStr;
@@ -1651,7 +1643,9 @@ begin
    System.ChDir(S);
 end;
 
-procedure LocateCursor(X, Y: Byte); assembler;
+procedure LocateCursor(X, Y: Byte);
+{$IFDEF CPUI8086}
+assembler;
 asm
         MOV     AH, 2
         XOR     BX, BX
@@ -1659,14 +1653,20 @@ asm
         MOV     DH, Y
         INT     10H
 end;
+{$ELSE}
+var Coord: Windows.TCoord;
+begin
+  Coord.X := X;
+  Coord.Y := Y;
+  Windows.SetConsoleCursorPosition(Windows.GetStdHandle(STD_OUTPUT_HANDLE), Coord);
+end;
+{$ENDIF}
 
- procedure FillWord(var B;Count, W: Word); assembler;
- asm
-    cld
-    mov  ax, W
-    les  di, B
-    mov  cx, Count
-    rep  stosw
+ procedure FillWord(var B;Count, W: Word);
+ type TWords = array[0..32766] of Word;
+ var I: Word;
+ begin
+   for I := 1 to Count do TWords(B)[I - 1] := W;
  end;
 
 function FindArg(const Command: string; var S: string): Boolean;
@@ -1730,7 +1730,7 @@ begin
    R.TermQ := 0;
    LongInt(R.Env) := 0;
    P := @R;
-
+{$IFDEF CPUI8086}
    asm
      push ds
      mov ax, $6400
@@ -1740,6 +1740,7 @@ begin
      int 21h
      pop ds
    end;
+{$ENDIF}
 
 end;
 
@@ -1807,37 +1808,21 @@ begin
    end;
 end;
 
-Procedure AddStr(var S ; C : char);assembler ;
-   asm
-        cld
-        les Di,S
-        inc ES:DI.byte
-        mov al,ES:DI.byte
-        sub ah,ah
-        add DI,AX
-        mov al,C
-        Stosb
-   end;
+Procedure AddStr(var S ; C : char);
+{ Appends C to the shortstring at S (untyped to match original). }
+var P: ^String;
+begin
+  P := @S;
+  P^[0] := Chr(Length(P^) + 1);
+  P^[Length(P^)] := C;
+end;
 
-Procedure DelRight;assembler ;
-   asm
-        les Di,S
-        mov bl,ES:DI.byte
-        sub bh,bh
-        or  BX,BX
-        jz  @@3
-    @@1:
-        mov al, ES:[DI+BX]
-        cmp al, ' '
-        je  @@D
-        cmp al, 9
-        jne @@2
-   @@D: dec BX
-        jnz @@1
-    @@2:
-        mov ES:DI.byte,bl
-    @@3:
-   end;
+Procedure DelRight;
+{ Strips trailing spaces and tabs from S in place. }
+begin
+  while (Length(S) > 0) and ((S[Length(S)] = ' ') or (S[Length(S)] = #9)) do
+    S[0] := Chr(Length(S) - 1);
+end;
 
 procedure DelLeft(var S: string);
 var
@@ -1852,7 +1837,9 @@ begin
   end;
 end;
 
-Procedure Sound ( Hz : word );assembler;
+Procedure Sound ( Hz : word );
+begin
+{$IFDEF CPUI8086}
      asm
         mov     ax,Hz
         cmp     ax,21
@@ -1865,7 +1852,7 @@ Procedure Sound ( Hz : word );assembler;
         out     061h,al
         mov     al,0B6h
         out     043h,al
-@@1:    mov     ax,04F38h  {  divider = 144f38h / Hz  }
+@@1:    mov     ax,04F38h
         mov     dx,014h
         div     bx
         out     042h,al
@@ -1873,13 +1860,19 @@ Procedure Sound ( Hz : word );assembler;
         out     042h,al
 @@2:
     end;
+{$ENDIF}
+end;
 
- Procedure Nosound ;assembler;
+Procedure Nosound;
+begin
+{$IFDEF CPUI8086}
      asm
         in      al,061h
         and     al,11111100b
         out     061h,al
      end;
+{$ENDIF}
+end;
 
 
   function FindParam(const S: string): Integer;
@@ -1960,7 +1953,9 @@ begin
   MakeCMDParams := FreeStr
 end;
 
-function Chk4Dos: Boolean; assembler;
+function Chk4Dos: Boolean;
+begin
+{$IFDEF CPUI8086}
   asm
     xor bh, bh
     mov ax, $D44D
@@ -1974,6 +1969,10 @@ function Chk4Dos: Boolean; assembler;
  @1:
     mov ax, bx
   end;
+{$ELSE}
+  Chk4Dos := False;
+{$ENDIF}
+end;
 
 
 
@@ -2000,9 +1999,20 @@ function  FileNameOf(var F: file): string;
 var
   S: string;
 begin
+{$IFDEF FPC}
+  { FPC's file record layout differs from TP7's, so the local TFileRec
+    mirror cannot be cast onto it. FPC's FileRec.Name is a 256-char
+    #0-terminated array, too large to assign to a ShortString, so
+    copy up to the terminator by hand. }
+  S := '';
+  while (Length(S) < 255) and (FileRec(F).Name[Length(S)] <> #0) do
+    S := S + FileRec(F).Name[Length(S)];
+  FileNameOf := S;
+{$ELSE}
   S := TFileRec(F).Name;
   S[0] := Char(Pos(#0, S)-1);
   FileNameOf := S;
+{$ENDIF}
 end;
 
 function MemAdjust(L: LongInt): LongInt;
@@ -2066,47 +2076,36 @@ begin
  CalcTmpId:=Id;
 end;
 
-procedure Hex8Lo(L:longInt;var HexLo);assembler;
-asm
-        cld
-        les     di,[HexLo]
-        lea     bx,[LoHexChar]
-        mov     dx,[word ptr L+2]
-        call    @@OutWord
-        mov     dx,[word ptr L+0]
-        call    @@OutWord
-        jmp     @@End
-
-@@OutWord:      {DX-word}
-        mov     ax,dx
-        mov     cl,12
-        shr     ax,cl
-        xlat
-        stosb
-        mov     al,dh
-        and     al,0Fh
-        xlat
-        stosb
-        mov     al,dl
-        mov     cl,4
-        shr     al,cl
-        xlat
-        stosb
-        mov     al,dl
-        and     al,0Fh
-        xlat
-        stosb
-        retn
-@@End:
+procedure Hex8Lo(L:longInt;var HexLo);
+{ Writes the 8 lowercase hex digits of L, most significant first. }
+type TB8 = array[0..7] of Char;
+var I, D: Integer;
+begin
+  for I := 0 to 7 do
+  begin
+    D := (L shr ((7 - I) * 4)) and $F;
+    if D < 10 then TB8(HexLo)[I] := Chr(Ord('0') + D)
+    else TB8(HexLo)[I] := Chr(Ord('a') + D - 10);
+  end;
 end;
 
 function CalcTmpFName; begin CalcTmpFName:=MakeNormName(SwpDir,Hex8(Id)+'.'+AExt) end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MemOK: Boolean;
+begin
+  { MemAvail/MaxAvail here resolve to Memory unit sentinel-large
+    substitutes, not System (which has neither on win32) }
+  if (MemAdjust(MemAvail) < $8000) or (MaxAvail < $4000) then MemOK := False
+    else MemOK := True;
+end;
+{$ELSE}
 function MemOK: Boolean;
 begin
   if (MemAdjust(System.MemAvail) < $8000) or (System.MaxAvail < $4000) then MemOK := False
     else MemOK := True;
 end;
+{$ENDIF}
 
 
 constructor TTextReader.Init;
@@ -2270,6 +2269,7 @@ begin
 end;
 
 BEGIN
+{$IFDEF CPUI8086}
  asm
   int 11h
   test al, 1
@@ -2286,8 +2286,18 @@ BEGIN
     xor bx, bx
     int 21h
  end;
- UpcaseArray[#0] := #0;
- LowcaseArray[#0] := #0;
- Dos40 := Lo(DosVersion)>=4;
- OS210 := (Lo(DosVersion)>=20) and (GetEnv('OS2COMSPEC') <> '');
+{$ELSE}
+  NumFloppy := 0;
+  FillChar(DCountryInfo, SizeOf(DCountryInfo), 0);
+  DCountryInfo.DateFmt := 0;
+  DCountryInfo.Currency[1] := '$';
+  DCountryInfo.ThSep[1] := ',';
+  DCountryInfo.DecSep[1] := '.';
+  DCountryInfo.DateSep[1] := '/';
+  DCountryInfo.TimeSep[1] := ':';
+{$ENDIF}
+  UpcaseArray[#0] := #0;
+  LowcaseArray[#0] := #0;
+  Dos40 := Lo(DosVersion)>=4;
+  OS210 := (Lo(DosVersion)>=20) and (GetEnv('OS2COMSPEC') <> '');
 END.

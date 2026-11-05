@@ -46,12 +46,13 @@
 
 {$ifndef db}
 unit DBView;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses DBWatch, Objects, Views, Drivers, Dos, Memory, Dialogs, RStrings, FViewer, Commands, ObjType;
 {$else}
 
-uses DBWatch, Objects, Views, Drivers, Dos, Memory, Menus, Messages,
+uses DBWatch, Objects, Views, Drivers, Dos, Memory, Menus, DnMessages,
      Advance, Startup, FViewer, Dialogs, Commands, DNApp, DNStdDlg;
 
 {$endif}
@@ -133,38 +134,47 @@ type
 
   RDBWindow: TStreamRec = (
   ObjType: otDBWindow;
-  VmtLink: Ofs( TypeOf( TDBWindow )^ );
+  VmtLink: TypeOf(TDBWindow);
   Load: @TDBWindow.Load;
   Store: @TDBWindow.Store );
 
   RDBViewer: TStreamRec = (
   ObjType: otDBViewer;
-  VmtLink: Ofs( TypeOf( TDBViewer )^ );
+  VmtLink: TypeOf(TDBViewer);
   Load: @TDBViewer.Load;
   Store: @TDBViewer.Store );
 
   RDBIndicator: TStreamRec = (
   ObjType: otDBIndicator;
-  VmtLink: Ofs( TypeOf( TDBIndicator )^ );
+  VmtLink: TypeOf(TDBIndicator);
   Load: @TDBIndicator.Load;
   Store: @TDBIndicator.Store );
 
   RTFieldListBox: TStreamRec = (
   ObjType: otFieldListBox;
-  VmtLink: Ofs( TypeOf( TFieldListBox )^ );
+  VmtLink: TypeOf(TFieldListBox);
   Load: @TFieldListBox.Load;
   Store: @TFieldListBox.Store );
 
 
 {$ifndef db}
 implementation
-uses Advance, Startup, DNHelp, DNApp, Messages;
+uses Advance, Startup, DNHelp, DNApp, DnMessages;
 {$endif}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither); Memory is
+    already in this unit's own interface uses clause. }
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
 function TFieldListBox.GetText;
  var P: PFieldRec;

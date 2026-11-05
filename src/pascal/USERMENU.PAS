@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit UserMenu;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Objects, Views, Scroller, Drivers, ObjType;
@@ -77,18 +78,18 @@ const RunFrom2E : Boolean = False;
 const
       RUserWindow: TStreamRec = (
        ObjType: otUserWindow;
-       VmtLink: Ofs(TypeOf(TUserWindow)^);
+       VmtLink: TypeOf(TUserWindow);
        Load: @TUserWindow.Load;
        Store: @TUserWindow.Store);
 
       RUserView: TStreamRec = (
        ObjType: otUserView;
-       VmtLink: Ofs(TypeOf(TUserView)^);
+       VmtLink: TypeOf(TUserView);
        Load: @TUserView.Load;
        Store: @TUserView.Store);
 
 implementation
-uses DNApp, Advance, Startup, Messages, Menus, Commands, MicroEd, WinClp,
+uses DNApp, Advance, Startup, DnMessages, Menus, Commands, MicroEd, WinClp,
      DNHelp, FilesCol, DOS, Memory, Dialogs, Tree, RStrings;
 
 type
@@ -543,6 +544,24 @@ procedure TGrabber.Draw;
  var B: TDrawBuffer;
      I: Integer;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+      procedure Invert(var B; K: integer);
+      var
+        Buf: PWordArray;
+        J: Integer;
+        W: Word;
+        Attr: Byte;
+      begin
+        Buf := PWordArray(@B);
+        for J := 0 to K - 1 do
+        begin
+          W := Buf^[J];
+          Attr := (Hi(W) xor $7F) and $7F;
+          if Attr = 0 then Attr := 7;
+          Buf^[J] := (Word(Attr) shl 8) or Lo(W);
+        end;
+      end;
+{$ELSE}
       procedure Invert(var B; K: integer); assembler;
        asm
          mov cx, K
@@ -558,6 +577,7 @@ procedure TGrabber.Draw;
          add bx, 2
          loop @@1
        end;
+{$ENDIF}
 begin
   with R do
    begin

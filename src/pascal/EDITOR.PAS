@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Editor;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Views, Objects, Drivers, MicroEd, ObjType;
@@ -58,13 +59,13 @@ type
 const
       RXFileEditor: TStreamRec = (
        ObjType: otXFileEditor;
-       VmtLink: Ofs(TypeOf(TXFileEditor)^);
+       VmtLink: TypeOf(TXFileEditor);
        Load: @TXFileEditor.Load;
        Store: @TXFileEditor.Store);
 
 implementation
 uses Advance, DOS, Dialogs, DNApp, RStrings, SBlocks, Memory, Gauge,
-     Startup, WinClp, Messages, Commands, Macro, xTime;
+     Startup, WinClp, DnMessages, Commands, Macro, xTime;
 
 type
      PSortCollection = ^TSortCollection;

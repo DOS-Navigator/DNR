@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Drives;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Dos, Objects, Memory, Views, Drivers, FilesCol, DiskInfo,
@@ -119,7 +120,7 @@ const
 
   RDrive: TStreamRec = (
     ObjType: otDrive;
-    VmtLink: Ofs(TypeOf(TDrive)^);
+    VmtLink: TypeOf(TDrive);
     Load: @TDrive.Load;
     Store: @TDrive.Store);
 

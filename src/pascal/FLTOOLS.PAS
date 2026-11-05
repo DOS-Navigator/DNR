@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit FlTools;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -77,7 +78,7 @@ procedure CM_Branch(AFP: Pointer);
 implementation
 uses Advance, Dos, Objects, Dialogs, FilesCol, Views, DnApp,
      Commands, Drivers, FlPanel, FlPanelX, Drives, FileCopy, Gauge, Gauges,
-     Archiver, Startup, SWE, Validate, Messages, Menus, DnHelp, FileFind,
+     Archiver, Startup, SWE, Validate, DnMessages, Menus, DnHelp, FileFind,
      Tree, FBB, DnUtil;
 
 type

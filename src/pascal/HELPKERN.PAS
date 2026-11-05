@@ -46,6 +46,7 @@
 
 UNIT
   HelpKernel;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 { Used by TVHC and HELPFILE }
 
@@ -155,7 +156,7 @@ type
 const
   RHelpTopic: TStreamRec = (
      ObjType: otHelpTopic;
-     VmtLink: Ofs(TypeOf(THelpTopic)^);
+     VmtLink: TypeOf(THelpTopic);
      Load:    @THelpTopic.Load;
      Store:   @THelpTopic.Store
   );
@@ -163,7 +164,7 @@ const
 const
   RHelpIndex: TStreamRec = (
      ObjType: otHelpIndex;
-     VmtLink: Ofs(TypeOf(THelpIndex)^);
+     VmtLink: TypeOf(THelpIndex);
      Load:    @THelpIndex.Load;
      Store:   @THelpIndex.Store
   );
@@ -448,6 +449,22 @@ begin
   IsBlank := (Ch = ' ') or (Ch = #13) or (Ch = #10);
 end;
 
+{$IFDEF FPC}
+function Scan(var P; Offset: Integer; C: Char): Integer;
+var
+  Buf: PByteArray;
+  I: Integer;
+begin
+  Buf := PByteArray(@P);
+  Scan := 256;
+  for I := 0 to 255 do
+    if Char(Buf^[Offset + I]) = C then
+    begin
+      Scan := I + 1;
+      Exit;
+    end;
+end;
+{$ELSE}
 function Scan(var P; Offset: Integer; C: Char): Integer; assembler;
 asm
         CLD
@@ -460,7 +477,15 @@ asm
         NEG     CX
         XCHG    AX,CX
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TextToLine(var Text; Offset, Length: Integer; var Line: String);
+begin
+  Line[0] := Chr(Length);
+  Move(PByteArray(@Text)^[Offset], Line[1], Length);
+end;
+{$ELSE}
 procedure TextToLine(var Text; Offset, Length: Integer; var Line: String);
   assembler;
 asm
@@ -475,6 +500,7 @@ asm
         REP     MOVSB
         POP     DS
 end;
+{$ENDIF}
 
 begin
   I := Scan(Text, Offset, #13);

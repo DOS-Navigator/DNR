@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Histries;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Drivers, Objects, Views, MicroEd, ObjType;
@@ -133,19 +134,19 @@ const
 
       REditHistoryCol: TStreamRec = (
       ObjType: otEditHistoryCol;
-      VmtLink: Ofs( TypeOf( TEditHistoryCol)^ );
+      VmtLink: TypeOf(TEditHistoryCol);
       Load: @TEditHistoryCol.Load;
       Store: @TEditHistoryCol.Store );
 
       RViewHistoryCol: TStreamRec = (
       ObjType: otViewHistoryCol;
-      VmtLink: Ofs( TypeOf( TViewHistoryCol)^ );
+      VmtLink: TypeOf(TViewHistoryCol);
       Load: @TViewHistoryCol.Load;
       Store: @TViewHistoryCol.Store );
 
 implementation
  uses Dos, Commands, DNApp, DNStdDlg, Dialogs, Advance,
-      Startup, RStrings, xTime, Messages, Idlers, DNUtil,
+      Startup, RStrings, xTime, DnMessages, Idlers, DNUtil,
       FViewer, CmdLine;
 
 procedure FreeLastUnmarked(C: PCollection);
@@ -378,6 +379,9 @@ begin
  DirHistory := PCollection(S.Get);
  EditHistory := PCollection(S.Get);
  ViewHistory := PCollection(S.Get);
+
+ if CmdStrings = nil then
+   CmdStrings := New(PLineCollection, Init(40, 10));
 
  CurString := CmdStrings^.Count;
  StrModified := False;

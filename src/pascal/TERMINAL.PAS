@@ -47,10 +47,11 @@
 {$F+}
 
 unit Terminal;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
-uses Objects, Views, Scroller, Drivers, Dos, Memory, Menus, Messages,
+uses Objects, Views, Scroller, Drivers, Dos, Memory, Menus, DnMessages,
      Advance, Commands, DNApp, OOCOM, DNStdDlg, apPort, DNHelp,
      OOZModem, OOXModem, OOYModem, OOKermit, OOAbsPcl, Dialogs, xTime,
      ObjType;
@@ -120,19 +121,19 @@ const
 
       RTerminalWindow: TStreamRec = (
        ObjType: otTerminalWindow;
-       VmtLink: Ofs(TypeOf(TTerminalWindow)^);
+       VmtLink: TypeOf(TTerminalWindow);
        Load: @TTerminalWindow.Load;
        Store: @TTerminalWindow.Store);
 
       RTerminal: TStreamRec = (
        ObjType: otTerminal;
-       VmtLink: Ofs(TypeOf(TTerminal)^);
+       VmtLink: TypeOf(TTerminal);
        Load: @TTerminal.Load;
        Store: @TTerminal.Store);
 
       RPortInfo: TStreamRec = (
        ObjType: otPortInfo;
-       VmtLink: Ofs(TypeOf(TPortInfo)^);
+       VmtLink: TypeOf(TPortInfo);
        Load: @TPortInfo.Load;
        Store: @TPortInfo.Store);
 

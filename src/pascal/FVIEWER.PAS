@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit FViewer;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -148,31 +149,31 @@ const
 
   RFileViewer: TStreamRec = (
      ObjType: otFileViewer;
-     VmtLink: Ofs(TypeOf(TFileViewer)^);
+     VmtLink: TypeOf(TFileViewer);
      Load:    @TFileViewer.Load;
      Store:   @TFileViewer.Store
   );
   RFileWindow: TStreamRec = (
      ObjType: otFileWindow;
-     VmtLink: Ofs(TypeOf(TFileWindow)^);
+     VmtLink: TypeOf(TFileWindow);
      Load:    @TFileWindow.Load;
      Store:   @TFileWindow.Store
   );
   RViewScroll: TStreamRec = (
      ObjType: otViewScroll;
-     VmtLink: Ofs(TypeOf(TViewScroll)^);
+     VmtLink: TypeOf(TViewScroll);
      Load:    @TViewScroll.Load;
      Store:   @TViewScroll.Store
   );
   RHFileViewer: TStreamRec = (
      ObjType: otHFileViewer;
-     VmtLink: Ofs(TypeOf(THFileViewer)^);
+     VmtLink: TypeOf(THFileViewer);
      Load:    @THFileViewer.Load;
      Store:   @THFileViewer.Store
   );
   RViewInfo  : TStreamRec = (
      ObjType: otViewInfo;
-     VmtLink: Ofs(TypeOf(TViewInfo)^);
+     VmtLink: TypeOf(TViewInfo);
      Load:    @TViewInfo.Load;
      Store:   @TViewInfo.Store
    );
@@ -200,13 +201,21 @@ function SearchFileStr(F: PStream; What: String; Pos: LongInt;
 
 implementation
 
-uses Memory, Messages, DNApp, Advance, Startup, Dialogs, RStrings,
+uses Memory, DnMessages, DNApp, Advance, Startup, Dialogs, RStrings,
      Gauge, Microed, DNStdDlg, Histries, xTime, Drives;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither) }
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
 const
   ViewerBufSize = $8000{8192};
@@ -723,6 +732,44 @@ var
   L: LongInt;
   S: String;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure MoveStr(var B, S; C, Flt: Byte);
+var
+  PB: PWordArray;
+  PS: PByteArray;
+  Ln, Idx, Bx: Word;
+  Ch: Byte;
+begin
+  PB := PWordArray(@B);
+  PS := PByteArray(@S);
+  Ln := PS^[0];
+  if Ln = 0 then Exit;
+  Bx := 0;
+  for Idx := 1 to Ln do
+  begin
+    Ch := PS^[Idx];
+    if Ch = 9 then
+    begin
+      repeat
+        PB^[Bx] := (Word(C) shl 8) or Word(Ord(' '));
+        Inc(Bx);
+      until (Bx and 7) = 0;
+    end
+    else
+    begin
+      if Flt <> 0 then
+      begin
+        if Ch < 32 then
+          Ch := $FA
+        else if (Flt = 1) and (Ch >= 128) then
+          Ch := $FA;
+      end;
+      PB^[Bx] := (Word(C) shl 8) or Word(Ch);
+      Inc(Bx);
+    end;
+  end;
+end;
+{$ELSE}
 procedure MoveStr(var B, S; C, Flt: Byte); assembler;
  asm
   push ds
@@ -769,7 +816,21 @@ procedure MoveStr(var B, S; C, Flt: Byte); assembler;
 @@Exit:
   pop  ds
 end;
+{$ENDIF}
 
+ {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ procedure XlatBuf(var B; Len: Integer; var XTable);
+ var
+   PB, PX: PByteArray;
+   I: Integer;
+ begin
+   if Len <= 0 then Exit;
+   PB := PByteArray(@B);
+   PX := PByteArray(@XTable);
+   for I := 0 to Len - 1 do
+     PB^[I] := PX^[PB^[I]];
+ end;
+ {$ELSE}
  procedure XlatBuf(var B; Len: Integer; var XTable); assembler;
  asm
    cmp Len, 0
@@ -789,6 +850,7 @@ end;
    pop  ds
 @@1:
  end;
+ {$ENDIF}
 
 
 var W: Integer;
@@ -1238,6 +1300,19 @@ procedure TFileViewer.HandleEvent;
 
    label 1, 2;
 
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  procedure XlatBuf(var B; Len: Integer; var XTable);
+  var
+    PB, PX: PByteArray;
+    I: Integer;
+  begin
+    if Len <= 0 then Exit;
+    PB := PByteArray(@B);
+    PX := PByteArray(@XTable);
+    for I := 0 to Len - 1 do
+      PB^[I] := PX^[PB^[I]];
+  end;
+  {$ELSE}
   procedure XlatBuf(var B; Len: Integer; var XTable); assembler;
   asm
     cmp Len, 0
@@ -1257,6 +1332,7 @@ procedure TFileViewer.HandleEvent;
     pop  ds
  @@1:
   end;
+  {$ENDIF}
 
 
  begin

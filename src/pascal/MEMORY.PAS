@@ -34,7 +34,7 @@
 //  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 //  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
 //  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-//  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+//  OTHERWISE) ARISING IN ANY WAY OUT of THE USE of THIS SOFTWARE, EVEN IF
 //  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  The licence and distribution terms for any publically available
@@ -45,12 +45,9 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Memory;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
-{-----------------------------------------------------}
-{ This module is based on Turbo Vision Memry Unit     }
-{ Copyright (c) 1990 by Borland International         }
-{-----------------------------------------------------}
-
+{$I compat.inc}
 
 interface
 
@@ -74,14 +71,148 @@ function GetBufferSize(P: Pointer): Word;
 function SetBufferSize(P: Pointer; Size: Word): Boolean;
 
 {$IFNDEF DPMI}
-
+{$IFNDEF MODERN}
 procedure GetBufMem(var P: Pointer; Size: Word);
 procedure FreeBufMem(P: Pointer);
 procedure SetMemTop(MemTop: Pointer);
-
+{$ENDIF}
 {$ENDIF}
 
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+{ Win32 (and other flat-memory targets) have no heap concept matching
+  the DOS "largest contiguous free block"; treat it as effectively
+  unlimited so callers that clamp an allocation against MaxAvail never
+  under-allocate on a modern OS. i8086 keeps FPCs real System.MaxAvail. }
+function MaxAvail: LongInt;
+{$ENDIF}{$ENDIF}
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+{ Same rationale as MaxAvail above. i8086 keeps FPCs real
+  System.MemAvail. }
+function MemAvail: LongInt;
+{$ENDIF}{$ENDIF}
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+{ TP's Mark/Release (bulk-free everything allocated since a saved
+  heap pointer) has no FPC equivalent - not a simple linear
+  allocator. No-ops here: accepts a memory leak (temporary AST
+  nodes from repeated formula evaluation) rather than attempting a
+  real bulk free, which would need walking the caller's own data
+  structures node by node. i8086 keeps FPCs real ones. }
+procedure Mark(var P: Pointer);
+procedure Release(P: Pointer);
+{$ENDIF}{$ENDIF}
+
 implementation
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+function MaxAvail: LongInt;
+begin
+  MaxAvail := High(LongInt) div 2;
+end;
+{$ENDIF}{$ENDIF}
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+function MemAvail: LongInt;
+begin
+  MemAvail := High(LongInt) div 2;
+end;
+{$ENDIF}{$ENDIF}
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+procedure Mark(var P: Pointer);
+begin
+  P := nil;
+end;
+
+procedure Release(P: Pointer);
+begin
+end;
+{$ENDIF}{$ENDIF}
+
+{$IFDEF MODERN}
+
+procedure InitMemory;
+begin
+  // FPC handles memory management automatically
+end;
+
+procedure DoneMemory;
+begin
+  // FPC handles memory management automatically
+end;
+
+procedure InitDosMem;
+begin
+  // No DOS memory in modern port
+end;
+
+procedure DoneDosMem;
+begin
+  // No DOS memory in modern port
+end;
+
+function LowMemory: Boolean;
+begin
+  // Not applicable in modern OS with virtual memory
+  Result := False;
+end;
+
+function MemAlloc(Size: Word): Pointer;
+begin
+  GetMem(Result, Size);
+end;
+
+function MemAllocSeg(Size: Word): Pointer;
+begin
+  // No segments in flat memory model, treat as normal allocation
+  GetMem(Result, Size);
+end;
+
+procedure NewCache(var P: Pointer; Size: Word);
+begin
+  // Simplified for modern port, direct allocation
+  GetMem(P, Size);
+end;
+
+procedure DisposeCache(P: Pointer);
+var
+  BlockSize: PtrInt;
+begin
+  if P = nil then Exit;
+  // FPC's memory manager knows the block size
+  FreeMem(P);
+end;
+
+procedure NewBuffer(var P: Pointer; Size: Word);
+begin
+  // Simplified for modern port
+  GetMem(P, Size);
+end;
+
+procedure DisposeBuffer(P: Pointer);
+begin
+  if P = nil then Exit;
+  FreeMem(P);
+end;
+
+function GetBufferSize(P: Pointer): Word;
+begin
+  // This is tricky without the original block structure.
+  // For now, we can't know the original size.
+  // This will need to be refactored where it's used.
+  Result := 0;
+end;
+
+function SetBufferSize(P: Pointer; Size: Word): Boolean;
+begin
+  // ReallocMem might be an option, but it's not a direct equivalent.
+  // This function might need to be deprecated.
+  ReallocMem(P, Size);
+  Result := (P <> nil);
+end;
+
+{$ELSE}
 
 type
   PtrRec = record
@@ -617,6 +748,8 @@ asm
 end;
 
 {$ENDIF}
+{$ENDIF} { closes {$IFDEF MODERN} opened near the top of the implementation.
+           It was missing: the file had 4 conditional opens and 3 closes, so
+           the compiler reported "$ENDIF expected for $ELSE MODERN". }
 
 end.
-

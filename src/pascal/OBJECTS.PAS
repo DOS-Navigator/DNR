@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Objects;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {-----------------------------------------------------}
 { This module is based on Turbo Vision Objects Unit   }
@@ -133,10 +134,10 @@ type
   PStreamRec = ^TStreamRec;
   TStreamRec = record
     ObjType: Word;
-    VmtLink: Word;
+    VmtLink: Pointer;
     Load: Pointer;
     Store: Pointer;
-    Next: Word;
+    Next: PStreamRec;
   end;
 
 { TStream }
@@ -166,7 +167,7 @@ type
 
 { DOS file name string }
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
   FNameStr = PChar;
 {$ELSE}
   FNameStr = string[79];
@@ -176,7 +177,14 @@ type
 
   PDosStream = ^TDosStream;
   TDosStream = object(TStream)
+{$IFDEF FPC}
+    { Widened for FPCs File* API: a Win32 file handle is not
+      guaranteed to fit in 16 bits. -1 (THandle(-1)) keeps the
+      original "not open" sentinel meaning. }
+    Handle: THandle;
+{$ELSE}
     Handle: Word;
+{$ENDIF}
     constructor Init(FileName: FNameStr; Mode: Word);
     destructor Done; virtual;
     function GetPos: Longint; virtual;
@@ -230,6 +238,13 @@ type
   TMemoryStream = object(TStream)
     SegCount: Integer;
     SegList: PWordArray;
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+    { Win32: one contiguous buffer replaces the segment list;
+      SegList/CurSeg above stay declared, unused, for layout
+      compatibility with the i8086 branch of every method below. }
+    Buffer: Pointer;
+    BufAlloc: Longint;
+{$ENDIF}{$ENDIF}
     CurSeg: Integer;
     BlockSize: Integer;
     Size: Longint;
@@ -243,7 +258,11 @@ type
     procedure Truncate; virtual;
     procedure Write(var Buf; Count: Word); virtual;
   private
+{$IFDEF CPUI8086}
     function ChangeListSize(ALimit: Word): Boolean;
+{$ELSE}
+    { Win32: no segment list to resize; see Init/Done/Truncate. }
+{$ENDIF}
   end;
 
 { TCollection types }
@@ -333,7 +352,7 @@ type
     procedure PutItem(var S: TStream; Item: Pointer); virtual;
   end;
 
-{$IFNDEF Windows}
+{$IFNDEF WIN16_GUI}
 
 { TResourceCollection object }
 
@@ -443,11 +462,24 @@ procedure DisposeStr(P: PString);
 
 { Longint routines }
 
+{ FPC has no equivalent of Turbo Pascal's inline($xx/$yy) machine-code
+  directive, so under FPC these become ordinary forward declarations and
+  are implemented in the implementation section below.
+
+  Original encodings, kept for the BP7 build:
+    LongMul  5A       pop dx      (Y)
+             58       pop ax      (X)
+             F7 EA    imul dx     -> DX:AX = X*Y, signed
+    LongDiv  59       pop cx      (Y)
+             58       pop ax      (X low)
+             5A       pop dx      (X high)
+             F7 F9    idiv cx     -> AX = X div Y, signed }
+
 function LongMul(X, Y: Integer): Longint;
-inline($5A/$58/$F7/$EA);
+{$IFNDEF FPC} inline($5A/$58/$F7/$EA); {$ENDIF}
 
 function LongDiv(X: Longint; Y: Integer): Integer;
-inline($59/$58/$5A/$F7/$F9);
+{$IFNDEF FPC} inline($59/$58/$5A/$F7/$F9); {$ENDIF}
 
 { Stream routines }
 
@@ -476,37 +508,37 @@ const
 const
   RCollection: TStreamRec = (
     ObjType: otCollection;
-    VmtLink: Ofs(TypeOf(TCollection)^);
+    VmtLink: TypeOf(TCollection);
     Load: @TCollection.Load;
     Store: @TCollection.Store);
 
 const
   RStringCollection: TStreamRec = (
     ObjType: otStringCollection;
-    VmtLink: Ofs(TypeOf(TStringCollection)^);
+    VmtLink: TypeOf(TStringCollection);
     Load: @TStringCollection.Load;
     Store: @TStringCollection.Store);
 
 const
   RStrCollection: TStreamRec = (
     ObjType: otStrCollection;
-    VmtLink: Ofs(TypeOf(TStrCollection)^);
+    VmtLink: TypeOf(TStrCollection);
     Load:    @TStrCollection.Load;
     Store:   @TStrCollection.Store);
 
-{$IFNDEF Windows }
+{$IFNDEF WIN16_GUI}
 
 const
   RStringList: TStreamRec = (
     ObjType: otStringList;
-    VmtLink: Ofs(TypeOf(TStringList)^);
+    VmtLink: TypeOf(TStringList);
     Load: @TStringList.Load;
     Store: nil);
 
 const
   RStrListMaker: TStreamRec = (
     ObjType: otStrListMaker;
-    VmtLink: Ofs(TypeOf(TStrListMaker)^);
+    VmtLink: TypeOf(TStrListMaker);
     Load: nil;
     Store: @TStrListMaker.Store);
 
@@ -514,13 +546,33 @@ const
 
 implementation
 
-{$IFDEF Windows}
-uses WinProcs, Strings, OMemory;
+{$IFDEF FPC}
+uses Memory, DnStrings, SysUtils;   { SysUtils: FileOpen/FileCreate/... }
 {$ELSE}
-uses Memory, Strings;
+{$IFDEF WIN16_GUI}
+uses WinProcs, DnStrings, OMemory;
+{$ELSE}
+uses Memory, DnStrings;
+{$ENDIF}
 {$ENDIF}
 
-{$IFDEF Windows}
+{$IFDEF FPC}
+{ Portable replacements for the inline() machine code declared in the
+  interface. Semantically identical: the original opcodes are a signed
+  16x16->32 multiply and a signed 32/16 divide. }
+
+function LongMul(X, Y: Integer): Longint;
+begin
+  LongMul := Longint(X) * Longint(Y);
+end;
+
+function LongDiv(X: Longint; Y: Integer): Integer;
+begin
+  LongDiv := X div Y;
+end;
+{$ENDIF}
+
+{$IFDEF WIN16_GUI}
   {$DEFINE NewExeFormat}
 {$ENDIF}
 
@@ -540,17 +592,39 @@ begin
   if P = nil then CnvString := '' else CnvString := P^;
 end;
 
+{$IFDEF FPC}
+{ FPC rejects both casting an object to a local record type and declaring
+  an object type inside a routine, so this lives at unit level. Follow
+  FPC's own Free Vision: derive an empty object whose Data field offset
+  IS the VMT-link size, so TObject.Init self-sizes instead of assuming
+  the link is a Word. }
+type
+  DummyObject = object(TObject)
+    Data: record end;
+  end;
+{$ENDIF}
+
 constructor TObject.Init;
+{$IFDEF FPC}
+var
+  LinkSize: LongInt;
+  Dummy: DummyObject;
+begin
+  LinkSize := PByte(@Dummy.Data) - PByte(@Dummy);
+  FillChar((PByte(@Self) + LinkSize)^, SizeOf(Self) - LinkSize, 0);
+end;
+{$ELSE}
 type
   Image = record
     Link: Word;
     Data: record end;
   end;
 begin
-{$IFNDEF Windows}
+{$IFNDEF WIN16_GUI}
   FillChar(Image(Self).Data, SizeOf(Self) - SizeOf(TObject), 0);
 {$ENDIF}
 end;
+{$ENDIF}
 
 { Shorthand procedure for a done/dispose }
 
@@ -566,67 +640,58 @@ end;
 { TStream type registration routines }
 
 const
-  StreamTypes: Word = 0;
+  StreamTypes: PStreamRec = nil;
 
 procedure RegisterError;
 begin
   RunError(212);
 end;
 
-PROCEDURE RegisterType; assembler;
-asm
-        MOV     AX,DS
-        CMP     AX,S.Word[2]
-        JNE     @@1
-        MOV     SI,S.Word[0]
-        MOV     AX,[SI].TStreamRec.ObjType
-        OR      AX,AX
-        JE      @@1
-        MOV     DI,StreamTypes
-        JMP     @@3
-@@1:    JMP     RegisterError
-@@2:    CMP     AX,[DI].TStreamRec.ObjType
-        JE      @@4
-        MOV     DI,[DI].TStreamRec.Next
-@@3:    OR      DI,DI
-        JNE     @@2
-        MOV     DI,StreamTypes
-        MOV     [SI].TStreamRec.Next,DI
-        MOV     StreamTypes,SI
-@@4:
+procedure RegisterType(var S: TStreamRec);
+{ Was 16-bit assembler. Rewritten in Pascal.
+  Matches original Borland Pascal semantics: duplicate registration is
+  ignored without error; only ObjType = 0 triggers RegisterError. }
+var
+  P: PStreamRec;
+begin
+  if S.ObjType = 0 then
+  begin
+    RegisterError;
+    Exit;
+  end;
+  P := StreamTypes;
+  while P <> nil do
+  begin
+    if P^.ObjType = S.ObjType then
+      Exit;
+    P := P^.Next;
+  end;
+  S.Next := StreamTypes;
+  StreamTypes := @S;
 end;
 
-PROCEDURE ReRegisterType; assembler;
-asm
-        MOV     AX,DS
-        CMP     AX,S.Word[2]
-        JNE     @Error
-        MOV     SI,S.Word[0]
-        MOV     DI,StreamTypes
-        MOV     [SI].TStreamRec.Next,DI
-        MOV     StreamTypes,SI
-        MOV     AX,[SI].TStreamRec.ObjType
-{ This moment:
-  SI: StreamTypes
-  DI: StreamTypes^.Next
-  AX: Current ObjType
-  GOAL: To find the same ObjType and
-        to remove it from list.
-}
-@Loop:
-        OR      DI,DI
-        JE      @End
-        CMP     AX,[DI].TStreamRec.ObjType
-        JE      @Found
-        MOV     SI,DI
-        MOV     DI,[DI].TStreamRec.Next
-        JMP     @Loop
-@Error: JMP     RegisterError
-@Found: MOV     AX,[DI].TStreamRec.Next
-        MOV     [SI].TStreamRec.Next,AX
-        XOR     AX,AX
-        MOV     [DI].TStreamRec.Next,AX
-@End:
+procedure ReRegisterType(var S: TStreamRec);
+{ Was 16-bit assembler. Semantics preserved from the original: push S onto
+  the head of the chain, then walk forward and unlink any later entry that
+  carries the same ObjType. }
+var
+  P, Prev: PStreamRec;
+begin
+  S.Next := StreamTypes;
+  StreamTypes := @S;
+  Prev := @S;
+  P := S.Next;
+  while P <> nil do
+  begin
+    if P^.ObjType = S.ObjType then
+    begin
+      Prev^.Next := P^.Next;
+      P^.Next := nil;
+      Exit;
+    end;
+    Prev := P;
+    P := P^.Next;
+  end;
 end;
 
 {
@@ -723,44 +788,54 @@ procedure TStream.Flush;
 begin
 end;
 
-function TStream.Get: PObject; assembler;
-asm
-        PUSH    AX
-        MOV     AX,SP
-        PUSH    SS
-        PUSH    AX
-        MOV     AX,2
-        PUSH    AX
-        LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        MOV     DI,ES:[DI]
-        CALL    DWORD PTR [DI].TStream_Read
-        POP     AX
-        OR      AX,AX
-        JE      @@3
-        MOV     BX,StreamTypes
-        JMP     @@2
-@@1:    CMP     AX,[BX].TStreamRec.ObjType
-        JE      @@4
-        MOV     BX,[BX].TStreamRec.Next
-@@2:    OR      BX,BX
-        JNE     @@1
-        LES     DI,Self
-        MOV     DX,stGetError
-        CALL    DoStreamError
-@@3:    XOR     AX,AX
-        MOV     DX,AX
-        JMP     @@5
-@@4:    LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        PUSH    [BX].TStreamRec.VmtLink
-        XOR     AX,AX
-        PUSH    AX
-        PUSH    AX
-        CALL    [BX].TStreamRec.Load
-@@5:
+{ Call helpers, copied from FPC's own Free Vision implementation
+  (packages/rtl-extra/src/inc/objects.pp). They wrap the object-model ABI
+  for invoking a constructor or a method through a raw code pointer, which
+  is the one part of this port that must not be hand-rolled.
+
+  NOTE: the argument order in the calls below looks transposed against the
+  parameter names in the type declarations. That is exactly how FPC writes
+  it; the names are only labels and the order is the calling convention.
+  Do not "fix" it. }
+type
+  TPointerConstructor = function(VMT: Pointer; Obj: Pointer; Param1: Pointer): Pointer;
+  TPointerMethod      = function(Obj: Pointer; Param1: Pointer): Pointer;
+
+function CallPointerConstructor(Ctor: Pointer; Obj: Pointer; VMT: Pointer;
+                                Param1: Pointer): Pointer;
+begin
+  CallPointerConstructor := TPointerConstructor(Ctor)(Obj, VMT, Param1);
+end;
+
+function CallPointerMethod(Method: Pointer; Obj: Pointer; Param1: Pointer): Pointer;
+begin
+  CallPointerMethod := TPointerMethod(Method)(Obj, Param1);
+end;
+
+function TStream.Get: PObject;
+{ Was 16-bit assembler. The constructor call goes through FPC's
+  CallPointerConstructor intrinsic, which is how Free Vision does it; the
+  object-model ABI must not be hand-rolled. }
+var
+  ObjType: Word;
+  P: PStreamRec;
+begin
+  Read(ObjType, SizeOf(ObjType));
+  if ObjType = 0 then
+  begin
+    Get := nil;
+    Exit;
+  end;
+  P := StreamTypes;
+  while (P <> nil) and (P^.ObjType <> ObjType) do
+    P := P^.Next;
+  if P = nil then
+  begin
+    Error(stGetError, ObjType);
+    Get := nil;
+  end
+  else
+    Get := PObject(CallPointerConstructor(P^.Load, nil, P^.VmtLink, @Self));
 end;
 
 function TStream.GetPos: Longint;
@@ -773,47 +848,37 @@ begin
   Abstract;
 end;
 
-procedure TStream.Put(P: PObject); assembler;
-asm
-        LES     DI,P
-        MOV     CX,ES
-        OR      CX,DI
-        JE      @@4
-        MOV     AX,ES:[DI]
-        MOV     BX,StreamTypes
-        JMP     @@2
-@@1:    CMP     AX,[BX].TStreamRec.VmtLink
-        JE      @@3
-        MOV     BX,[BX].TStreamRec.Next
-@@2:    OR      BX,BX
-        JNE     @@1
-        LES     DI,Self
-        MOV     DX,stPutError
-        CALL    DoStreamError
-        JMP     @@5
-@@3:    MOV     CX,[BX].TStreamRec.ObjType
-@@4:    PUSH    BX
-        PUSH    CX
-        MOV     AX,SP
-        PUSH    SS
-        PUSH    AX
-        MOV     AX,2
-        PUSH    AX
-        LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        MOV     DI,ES:[DI]
-        CALL    DWORD PTR [DI].TStream_Write
-        POP     CX
-        POP     BX
-        JCXZ    @@5
-        LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        PUSH    P.Word[2]
-        PUSH    P.Word[0]
-        CALL    [BX].TStreamRec.Store
-@@5:
+procedure TStream.Put(P: PObject);
+{ Was 16-bit assembler. Identifies the object by the VMT pointer stored in
+  its first field, then dispatches Store via CallPointerMethod. }
+var
+  ObjType: Word;
+  Link: Pointer;
+  Q: PStreamRec;
+  VmtPtr: ^Pointer;
+begin
+  Q := nil;
+  VmtPtr := Pointer(P);
+  if VmtPtr <> nil then
+    Link := VmtPtr^
+  else
+    Link := nil;
+  ObjType := 0;
+  if (P <> nil) and (Link <> nil) then
+  begin
+    Q := StreamTypes;
+    while (Q <> nil) and (Q^.VmtLink <> Link) do
+      Q := Q^.Next;
+    if Q = nil then
+    begin
+      Error(stPutError, 0);
+      Exit;
+    end;
+    ObjType := Q^.ObjType;
+  end;
+  Write(ObjType, SizeOf(ObjType));
+  if ObjType <> 0 then
+    CallPointerMethod(Q^.Store, P, @Self);
 end;
 
 procedure TStream.Read(var Buf; Count: Word);
@@ -890,6 +955,95 @@ end;
 
 { TDosStream }
 
+{$IFDEF FPC}
+
+constructor TDosStream.Init(FileName: FNameStr; Mode: Word);
+begin
+  TStream.Init;
+  if Mode = stCreate then
+    Handle := FileCreate(FileName)
+  else
+    Handle := FileOpen(FileName, Mode and 3);
+  if Longint(Handle) = -1 then
+  begin
+    Error(stInitError, 0);
+    Handle := THandle(-1);
+  end;
+end;
+
+destructor TDosStream.Done;
+begin
+  if Longint(Handle) <> -1 then FileClose(Handle);
+  inherited Done;
+end;
+
+function TDosStream.GetPos: Longint;
+begin
+  if Status <> 0 then
+    GetPos := -1
+  else
+    GetPos := FileSeek(Handle, 0, 1);
+end;
+
+function TDosStream.GetSize: Longint;
+var
+  Cur: Longint;
+begin
+  if Status <> 0 then
+  begin
+    GetSize := -1;
+    Exit;
+  end;
+  Cur := FileSeek(Handle, 0, 1);
+  GetSize := FileSeek(Handle, 0, 2);
+  FileSeek(Handle, Cur, 0);
+end;
+
+procedure TDosStream.Read(var Buf; Count: Word);
+var
+  N: Longint;
+begin
+  if Status <> 0 then
+  begin
+    FillChar(Buf, Count, 0);
+    Exit;
+  end;
+  N := FileRead(Handle, Buf, Count);
+  if N <> Longint(Count) then
+  begin
+    if N < 0 then N := 0;
+    FillChar(Pointer(PtrUInt(@Buf) + PtrUInt(N))^, Count - N, 0);
+    Error(stReadError, 0);
+  end;
+end;
+
+procedure TDosStream.Seek(Pos: Longint);
+begin
+  if Status <> 0 then Exit;
+  if Pos < 0 then Pos := 0;
+  if FileSeek(Handle, Pos, 0) < 0 then
+    Error(stError, 0);
+end;
+
+procedure TDosStream.Truncate;
+begin
+  if Status <> 0 then Exit;
+  if not FileTruncate(Handle, FileSeek(Handle, 0, 1)) then
+    Error(stError, 0);
+end;
+
+procedure TDosStream.Write(var Buf; Count: Word);
+var
+  N: Longint;
+begin
+  if Status <> 0 then Exit;
+  N := FileWrite(Handle, Buf, Count);
+  if N <> Longint(Count) then
+    Error(stWriteError, 0);
+end;
+
+{$ELSE}
+
 constructor TDosStream.Init(FileName: FNameStr; Mode: Word); assembler;
 var
   NameBuf: array[0..79] of Char;
@@ -900,7 +1054,7 @@ asm
         PUSH    ES
         PUSH    DI
         CALL    TStream.Init
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
         LEA     DI,NameBuf
         PUSH    SS
         PUSH    DI
@@ -1100,6 +1254,8 @@ asm
 @@2:
 end;
 
+{$ENDIF}
+
 { TBufStream }
 
 { Flush TBufStream buffer                               }
@@ -1107,6 +1263,10 @@ end;
 {       ES:DI = TBufStream pointer                      }
 { Out   ZF    = Status test                             }
 
+{$IFDEF FPC}
+{ Dead under FPC (TBufStream.Flush no longer calls it); kept only so the
+  original i8086 implementation is preserved unmodified in the ELSE arm. }
+{$ELSE}
 procedure FlushBuffer; near; assembler;
 asm
         MOV     CX,ES:[DI].TBufStream.BufPtr
@@ -1141,6 +1301,7 @@ asm
         CMP     AX,ES:[DI].TStream.Status
 @@4:
 end;
+{$ENDIF}
 
 constructor TBufStream.Init(FileName: FNameStr; Mode, Size: Word);
 begin
@@ -1159,6 +1320,12 @@ begin
   FreeMem(Buffer, BufSize);
 end;
 
+{$IFDEF FPC}
+procedure TBufStream.Flush;
+begin
+  { Nothing is buffered above the OS under FPC; see file header comment. }
+end;
+{$ELSE}
 procedure TBufStream.Flush; assembler;
 asm
         LES     DI,Self
@@ -1168,7 +1335,14 @@ asm
         CALL    FlushBuffer
 @@1:
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+function TBufStream.GetPos: Longint;
+begin
+  GetPos := inherited GetPos;
+end;
+{$ELSE}
 function TBufStream.GetPos: Longint; assembler;
 asm
         LES     DI,Self
@@ -1184,7 +1358,14 @@ asm
         ADC     DX,0
 @@1:
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+function TBufStream.GetSize: Longint;
+begin
+  GetSize := inherited GetSize;
+end;
+{$ELSE}
 function TBufStream.GetSize: Longint; assembler;
 asm
         LES     DI,Self
@@ -1195,7 +1376,14 @@ asm
         CALL    TBufStream.Flush
         CALL    TDosStream.GetSize
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TBufStream.Read(var Buf; Count: Word);
+begin
+  inherited Read(Buf, Count);
+end;
+{$ELSE}
 procedure TBufStream.Read(var Buf; Count: Word); assembler;
 asm
         LES     DI,Self
@@ -1252,7 +1440,14 @@ asm
         REP     STOSB
 @@7:
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TBufStream.Seek(Pos: Longint);
+begin
+  inherited Seek(Pos);
+end;
+{$ELSE}
 procedure TBufStream.Seek(Pos: Longint); assembler;
 asm
         LES     DI,Self
@@ -1282,6 +1477,7 @@ asm
         CALL    TDosStream.Seek
 @@2:
 end;
+{$ENDIF}
 
 procedure TBufStream.Truncate;
 begin
@@ -1289,6 +1485,12 @@ begin
   TDosStream.Truncate;
 end;
 
+{$IFDEF FPC}
+procedure TBufStream.Write(var Buf; Count: Word);
+begin
+  inherited Write(Buf, Count);
+end;
+{$ELSE}
 procedure TBufStream.Write(var Buf; Count: Word); assembler;
 asm
         LES     DI,Self
@@ -1330,6 +1532,7 @@ asm
         JMP     @@1
 @@4:
 end;
+{$ENDIF}
 
 { TEmsStream }
 
@@ -1382,6 +1585,57 @@ asm
         MOV     ES:[DI].TEmsStream.PageCount,BX
 @@2:
 end;
+
+{$IFDEF FPC}
+
+constructor TEmsStream.Init(MinSize, MaxSize: LongInt);
+begin
+  { EMS (INT 67h bank-switched memory) does not exist on Win32; there is
+    nothing to initialise. This mirrors exactly how DN behaves on real
+    DOS hardware with no EMS board present - every call site already
+    checks Status and falls back, so this is the designed-for path, not
+    a stand-in for missing functionality. }
+  TStream.Init;
+  Handle := 0;
+  PageCount := 0;
+  Size := 0;
+  Position := 0;
+  Error(stInitError, 0);
+end;
+
+destructor TEmsStream.Done;
+begin
+  inherited Done;
+end;
+
+function TEmsStream.GetPos: Longint;
+begin
+  GetPos := -1;
+end;
+
+function TEmsStream.GetSize: Longint;
+begin
+  GetSize := -1;
+end;
+
+procedure TEmsStream.Read(var Buf; Count: Word);
+begin
+  FillChar(Buf, Count, 0);
+end;
+
+procedure TEmsStream.Seek(Pos: Longint);
+begin
+end;
+
+procedure TEmsStream.Truncate;
+begin
+end;
+
+procedure TEmsStream.Write(var Buf; Count: Word);
+begin
+end;
+
+{$ELSE}
 
 constructor TEmsStream.Init(MinSize, MaxSize: LongInt); assembler;
 const
@@ -1646,7 +1900,115 @@ asm
 @@7:
 end;
 
+{$ENDIF}
+
 { TMemoryStream }
+
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+
+constructor TMemoryStream.Init(ALimit: Longint; ABlockSize: Word);
+begin
+  TStream.Init;
+  BlockSize := ABlockSize;
+  Position := 0;
+  Size := 0;
+  Buffer := nil;
+  BufAlloc := 0;
+  if ALimit > 0 then
+  begin
+    GetMem(Buffer, ALimit);
+    if Buffer = nil then
+    begin
+      Error(stInitError, 0);
+      Exit;
+    end;
+    BufAlloc := ALimit;
+  end;
+  Size := ALimit;
+end;
+
+destructor TMemoryStream.Done;
+begin
+  if Buffer <> nil then FreeMem(Buffer, BufAlloc);
+  Buffer := nil;
+  BufAlloc := 0;
+  inherited Done;
+end;
+
+function TMemoryStream.GetPos: Longint;
+begin
+  if Status <> 0 then GetPos := -1 else GetPos := Position;
+end;
+
+function TMemoryStream.GetSize: Longint;
+begin
+  if Status <> 0 then GetSize := -1 else GetSize := Size;
+end;
+
+procedure TMemoryStream.Read(var Buf; Count: Word);
+begin
+  if Status <> 0 then
+  begin
+    FillChar(Buf, Count, 0);
+    Exit;
+  end;
+  if Longint(Position) + Longint(Count) > Size then
+  begin
+    Error(stReadError, 0);
+    FillChar(Buf, Count, 0);
+    Exit;
+  end;
+  Move(Pointer(PtrUInt(Buffer) + PtrUInt(Position))^, Buf, Count);
+  Inc(Position, Count);
+end;
+
+procedure TMemoryStream.Seek(Pos: Longint);
+begin
+  if Pos < 0 then Pos := 0;
+  Position := Pos;
+end;
+
+procedure TMemoryStream.Truncate;
+var
+  NewAlloc: Longint;
+begin
+  if Status <> 0 then Exit;
+  if Position > BufAlloc then
+  begin
+    NewAlloc := Position;
+    ReallocMem(Buffer, NewAlloc);
+    if (Buffer = nil) and (NewAlloc > 0) then
+    begin
+      Error(stError, 0);
+      Exit;
+    end;
+    BufAlloc := NewAlloc;
+  end;
+  Size := Position;
+end;
+
+procedure TMemoryStream.Write(var Buf; Count: Word);
+var
+  NewAlloc: Longint;
+begin
+  if Status <> 0 then Exit;
+  if Longint(Position) + Longint(Count) > BufAlloc then
+  begin
+    NewAlloc := Longint(Position) + Longint(Count);
+    ReallocMem(Buffer, NewAlloc);
+    if Buffer = nil then
+    begin
+      Error(stWriteError, 0);
+      Exit;
+    end;
+    BufAlloc := NewAlloc;
+  end;
+  Move(Buf, Pointer(PtrUInt(Buffer) + PtrUInt(Position))^, Count);
+  Inc(Position, Count);
+  if Position > Size then Size := Position;
+end;
+
+{$ELSE}
 
 const
   MaxSegArraySize = 16384;
@@ -1951,6 +2313,8 @@ asm
 @@7:
 end;
 
+{$ENDIF}{$ENDIF}
+
 { TCollection }
 
 const
@@ -1998,27 +2362,46 @@ begin
   SetLimit(0);
 end;
 
-function TCollection.At(Index: Integer): Pointer; assembler;
-asm
-        LES     DI,Self
-        MOV     BX,Index
-        OR      BX,BX
-        JL      @@1
-        CMP     BX,ES:[DI].TCollection.Count
-        JGE     @@1
-        LES     DI,ES:[DI].TCollection.Items
-        SHL     BX,1
-        SHL     BX,1
-        MOV     AX,ES:[DI+BX]
-        MOV     DX,ES:[DI+BX+2]
-        JMP     @@2
-@@1:    MOV     AX,coIndexError
-        CALL    CollectionError
-        XOR     AX,AX
-        MOV     DX,AX
-@@2:
+function TCollection.At(Index: Integer): Pointer;
+{ Was 16-bit assembler: bounds-checked index into Items. }
+begin
+  if (Index >= 0) and (Index < Count) then
+    At := Items^[Index]
+  else
+  begin
+    Error(coIndexError, 0);
+    At := nil;
+  end;
 end;
 
+{$IFDEF FPC}
+type
+  TPointerMethodLocalTC = function(_BP: Word; Param1: Pointer): Pointer;
+
+function CallPointerMethodLocalTC(Func: Pointer; Frame: Pointer;
+                                  Param1: Pointer): Pointer;
+begin
+{$IFDEF cpui8086}
+  CallPointerMethodLocalTC := TPointerMethodLocalTC(Func)(Ofs(Frame^), Param1);
+{$ELSE}
+  CallPointerMethodLocalTC := TPointerMethodLocalTC(Func)(PtrUInt(Frame), Param1);
+{$ENDIF}
+end;
+{$ENDIF}
+
+{$IFDEF FPC}
+procedure TCollection.AtDelete(Index: Integer);
+begin
+  if (Index < 0) or (Index >= Count) then
+  begin
+    Error(coIndexError, 0);
+    Exit;
+  end;
+  Dec(Count);
+  if Count > Index then
+    Move(Items^[Index + 1], Items^[Index], (Count - Index) * SizeOf(Pointer));
+end;
+{$ELSE}
 procedure TCollection.AtDelete(Index: Integer); assembler;
 asm
         LES     DI,Self
@@ -2048,6 +2431,7 @@ asm
         CALL    CollectionError
 @@2:
 end;
+{$ENDIF}
 
 procedure TCollection.AtFree(Index: Integer);
 var
@@ -2058,6 +2442,29 @@ begin
   FreeItem(Item);
 end;
 
+{$IFDEF FPC}
+procedure TCollection.AtInsert(Index: Integer; Item: Pointer);
+begin
+  if (Index < 0) or (Index > Count) then
+  begin
+    Error(coIndexError, 0);
+    Exit;
+  end;
+  if Count = Limit then
+  begin
+    SetLimit(Count + Delta);
+    if Count = Limit then
+    begin
+      Error(coOverflow, Limit);
+      Exit;
+    end;
+  end;
+  if Count > Index then
+    Move(Items^[Index], Items^[Index + 1], (Count - Index) * SizeOf(Pointer));
+  Items^[Index] := Item;
+  Inc(Count);
+end;
+{$ELSE}
 procedure TCollection.AtInsert(Index: Integer; Item: Pointer); assembler;
 asm
         LES     DI,Self
@@ -2112,7 +2519,17 @@ asm
 @@5:    CALL    CollectionError
 @@6:
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TCollection.AtPut(Index: Integer; Item: Pointer);
+begin
+  if (Index < 0) or (Index >= Count) then
+    Error(coIndexError, 0)
+  else
+    Items^[Index] := Item;
+end;
+{$ELSE}
 procedure TCollection.AtPut(Index: Integer; Item: Pointer); assembler;
 asm
         LES     AX,Item
@@ -2133,6 +2550,7 @@ asm
         CALL    CollectionError
 @@2:
 end;
+{$ENDIF}
 
 procedure TCollection.AtReplace;
 var
@@ -2160,6 +2578,21 @@ begin
   {RunError(212 - Code);}
 end;
 
+{$IFDEF FPC}
+function TCollection.FirstThat(Test: Pointer): Pointer;
+var
+  I: Integer;
+begin
+  FirstThat := nil;
+  for I := 0 to Count - 1 do
+    if Boolean(PtrUInt(CallPointerMethodLocalTC(Test,
+         get_caller_frame(get_frame, get_pc_addr), Items^[I])) and 1) then
+    begin
+      FirstThat := Items^[I];
+      Exit;
+    end;
+end;
+{$ELSE}
 function TCollection.FirstThat(Test: Pointer): Pointer; assembler;
 asm
         LES     DI,Self
@@ -2171,7 +2604,7 @@ asm
         PUSH    CX
         PUSH    WORD PTR ES:[DI+2]
         PUSH    WORD PTR ES:[DI]
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
         MOV     AX,[BP]
         AND     AL,0FEH
         PUSH    AX
@@ -2193,7 +2626,17 @@ asm
         MOV     DX,ES:[DI+2]
 @@4:
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TCollection.ForEach(Action: Pointer);
+var
+  I: Integer;
+begin
+  for I := 0 to Count - 1 do
+    CallPointerMethodLocalTC(Action, get_caller_frame(get_frame, get_pc_addr), Items^[I]);
+end;
+{$ELSE}
 procedure TCollection.ForEach(Action: Pointer); assembler;
 asm
         LES     DI,Self
@@ -2205,7 +2648,7 @@ asm
         PUSH    CX
         PUSH    WORD PTR ES:[DI+2]
         PUSH    WORD PTR ES:[DI]
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
         MOV     AX,[BP]
         AND     AL,0FEH
         PUSH    AX
@@ -2220,6 +2663,7 @@ asm
         LOOP    @@1
 @@2:
 end;
+{$ENDIF}
 
 procedure TCollection.Free(Item: Pointer);
 begin
@@ -2245,6 +2689,20 @@ begin
   GetItem := S.Get;
 end;
 
+{$IFDEF FPC}
+function TCollection.IndexOf(Item: Pointer): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to Count - 1 do
+    if Items^[I] = Item then
+    begin
+      IndexOf := I;
+      Exit;
+    end;
+  IndexOf := -1;
+end;
+{$ELSE}
 function TCollection.IndexOf(Item: Pointer): Integer; assembler;
 asm
         MOV     AX,Item.Word[0]
@@ -2274,12 +2732,28 @@ asm
 @@3:    MOV     AX,-1
 @@2:
 end;
+{$ENDIF}
 
 procedure TCollection.Insert(Item: Pointer);
 begin
   AtInsert(Count, Item);
 end;
 
+{$IFDEF FPC}
+function TCollection.LastThat(Test: Pointer): Pointer;
+var
+  I: Integer;
+begin
+  LastThat := nil;
+  for I := Count - 1 downto 0 do
+    if Boolean(PtrUInt(CallPointerMethodLocalTC(Test,
+         get_caller_frame(get_frame, get_pc_addr), Items^[I])) and 1) then
+    begin
+      LastThat := Items^[I];
+      Exit;
+    end;
+end;
+{$ELSE}
 function TCollection.LastThat(Test: Pointer): Pointer; assembler;
 asm
         LES     DI,Self
@@ -2296,7 +2770,7 @@ asm
         PUSH    CX
         PUSH    WORD PTR ES:[DI+2]
         PUSH    WORD PTR ES:[DI]
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
         MOV     AX,[BP]
         AND     AL,0FEH
         PUSH    AX
@@ -2317,7 +2791,23 @@ asm
         MOV     DX,ES:[DI+2]
 @@4:
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TCollection.Pack;
+var
+  I, N: Integer;
+begin
+  N := 0;
+  for I := 0 to Count - 1 do
+    if Items^[I] <> nil then
+    begin
+      Items^[N] := Items^[I];
+      Inc(N);
+    end;
+  Count := N;
+end;
+{$ELSE}
 procedure TCollection.Pack; assembler;
 asm
         LES     DI,Self
@@ -2348,6 +2838,7 @@ asm
         MOV     ES:[BX].TCollection.Count,DI
 @@3:
 end;
+{$ENDIF}
 
 procedure TCollection.PutItem(var S: TStream; Item: Pointer);
 begin
@@ -2463,27 +2954,11 @@ end;
 
 { TStringCollection }
 
-function TStringCollection.Compare(Key1, Key2: Pointer): Integer; assembler;
-asm
-        PUSH    DS
-        CLD
-        LDS     SI,Key1
-        LES     DI,Key2
-        LODSB
-        MOV     AH,ES:[DI]
-        INC     DI
-        MOV     CL,AL
-        CMP     CL,AH
-        JBE     @@1
-        MOV     CL,AH
-@@1:    XOR     CH,CH
-        REP     CMPSB
-        JE      @@2
-        MOV     AL,DS:[SI-1]
-        MOV     AH,ES:[DI-1]
-@@2:    SUB     AL,AH
-        SBB     AH,AH
-        POP     DS
+function TStringCollection.Compare(Key1, Key2: Pointer): Integer;
+{ Was 16-bit assembler: signed byte-difference shortstring compare,
+  same semantics as SysUtils.CompareStr. }
+begin
+  Compare := CompareStr(PString(Key1)^, PString(Key2)^);
 end;
 
 procedure TStringCollection.FreeItem(Item: Pointer);
@@ -2540,7 +3015,7 @@ begin
   S.StrWrite(Item);
 end;
 
-{$IFNDEF Windows }
+{$IFNDEF WIN16_GUI}
 
 { Private resource manager types }
 
@@ -2851,38 +3326,26 @@ begin
   FreeMem(Index, IndexSize * SizeOf(TStrIndexRec));
 end;
 
-function TStringList.Get(Key: Word): String; assembler;
-asm
-        PUSH    DS
-        LDS     SI,Self
-        LES     DI,@Result
-        CLD
-        MOV     CX,DS:[SI].TStringList.IndexSize
-        JCXZ    @@2
-        MOV     BX,Key
-        LDS     SI,DS:[SI].TStringList.Index
-@@1:    MOV     DX,BX
-        LODSW
-        SUB     DX,AX
-        LODSW
-        CMP     DX,AX
-        LODSW
-        JB      @@3
-        LOOP    @@1
-@@2:    POP     DS
-        XOR     AL,AL
-        STOSB
-        JMP     @@4
-@@3:    POP     DS
-        PUSH    ES
-        PUSH    DI
-        PUSH    AX
-        PUSH    DX
-        LES     DI,Self
-        PUSH    ES
-        PUSH    DI
-        CALL    TStringList.ReadStr
-@@4:
+function TStringList.Get(Key: Word): String;
+{ Was 16-bit assembler. Index[I] covers keys in
+  [Index[I].Key, Index[I].Key + Index[I].Count); Skip is the offset
+  within that entry. }
+var
+  I: Integer;
+  Skip: Word;
+  S: String;
+begin
+  for I := 0 to IndexSize - 1 do
+  begin
+    Skip := Key - Index^[I].Key;
+    if Skip < Index^[I].Count then
+    begin
+      ReadStr(S, Index^[I].Offset, Skip);
+      Get := S;
+      Exit;
+    end;
+  end;
+  Get := '';
 end;
 
 procedure TStringList.ReadStr(var S: String; Offset, Skip: Word);
@@ -2948,6 +3411,10 @@ end;
 
 { TRect }
 
+{$IFDEF FPC}
+{ Dead under FPC: Grow/Intersect inline the check instead, since there
+  is no Pascal equivalent of "expects ES:DI pre-loaded by the caller". }
+{$ELSE}
 procedure CheckEmpty; near; assembler;
 asm
         MOV     AX,ES:[DI].TRect.A.X
@@ -2964,7 +3431,15 @@ asm
         STOSW
 @@2:
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TRect.Assign(XA, YA, XB, YB: Integer);
+begin
+  A.X := XA; A.Y := YA;
+  B.X := XB; B.Y := YB;
+end;
+{$ELSE}
 procedure TRect.Assign(XA, YA, XB, YB: Integer); assembler;
 asm
         LES     DI,Self
@@ -2978,7 +3453,15 @@ asm
         MOV     AX,YB
         STOSW
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TRect.Copy(R: TRect);
+begin
+  A := R.A;
+  B := R.B;
+end;
+{$ELSE}
 procedure TRect.Copy(R: TRect); assembler;
 asm
         PUSH    DS
@@ -2991,7 +3474,15 @@ asm
         MOVSW
         POP     DS
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TRect.Move(ADX, ADY: Integer);
+begin
+  Inc(A.X, ADX); Inc(B.X, ADX);
+  Inc(A.Y, ADY); Inc(B.Y, ADY);
+end;
+{$ELSE}
 procedure TRect.Move(ADX, ADY: Integer); assembler;
 asm
         LES     DI,Self
@@ -3002,7 +3493,19 @@ asm
         ADD     ES:[DI].TRect.A.Y,AX
         ADD     ES:[DI].TRect.B.Y,AX
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TRect.Grow(ADX, ADY: Integer);
+begin
+  Dec(A.X, ADX); Inc(B.X, ADX);
+  Dec(A.Y, ADY); Inc(B.Y, ADY);
+  if (A.X >= B.X) or (A.Y >= B.Y) then
+  begin
+    A.X := 0; A.Y := 0; B.X := 0; B.Y := 0;
+  end;
+end;
+{$ELSE}
 procedure TRect.Grow(ADX, ADY: Integer); assembler;
 asm
         LES     DI,Self
@@ -3014,7 +3517,21 @@ asm
         ADD     ES:[DI].TRect.B.Y,AX
         CALL    CheckEmpty
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TRect.Intersect(R: TRect);
+begin
+  if R.A.X > A.X then A.X := R.A.X;
+  if R.A.Y > A.Y then A.Y := R.A.Y;
+  if R.B.X < B.X then B.X := R.B.X;
+  if R.B.Y < B.Y then B.Y := R.B.Y;
+  if (A.X >= B.X) or (A.Y >= B.Y) then
+  begin
+    A.X := 0; A.Y := 0; B.X := 0; B.Y := 0;
+  end;
+end;
+{$ELSE}
 procedure TRect.Intersect(R: TRect); assembler;
 asm
         PUSH    DS
@@ -3049,7 +3566,17 @@ asm
         SUB     DI,8
         CALL    CheckEmpty
 end;
+{$ENDIF}
 
+{$IFDEF FPC}
+procedure TRect.Union(R: TRect);
+begin
+  if R.A.X < A.X then A.X := R.A.X;
+  if R.A.Y < A.Y then A.Y := R.A.Y;
+  if R.B.X > B.X then B.X := R.B.X;
+  if R.B.Y > B.Y then B.Y := R.B.Y;
+end;
+{$ELSE}
 procedure TRect.Union(R: TRect); assembler;
 asm
         PUSH    DS
@@ -3082,51 +3609,27 @@ asm
         STOSW
 @@4:    POP     DS
 end;
+{$ENDIF}
 
-function TRect.Contains(P: TPoint): Boolean; assembler;
-asm
-        LES     DI,Self
-        MOV     AL,0
-        MOV     DX,P.X
-        CMP     DX,ES:[DI].TRect.A.X
-        JL      @@1
-        CMP     DX,ES:[DI].TRect.B.X
-        JGE     @@1
-        MOV     DX,P.Y
-        CMP     DX,ES:[DI].TRect.A.Y
-        JL      @@1
-        CMP     DX,ES:[DI].TRect.B.Y
-        JGE     @@1
-        INC     AX
-@@1:
+function TRect.Contains(P: TPoint): Boolean;
+{ Was 16-bit assembler; semantics preserved exactly (half-open rectangle:
+  >= A, < B), matching FPC's Free Vision implementation. }
+begin
+  Contains := (P.X >= A.X) and (P.X < B.X) and
+              (P.Y >= A.Y) and (P.Y < B.Y);
 end;
 
-function TRect.Equals(R: TRect): Boolean; assembler;
-asm
-        PUSH    DS
-        LDS     SI,R
-        LES     DI,Self
-        MOV     CX,4
-        CLD
-        REP     CMPSW
-        MOV     AL,0
-        JNE     @@1
-        INC     AX
-@@1:    POP     DS
+function TRect.Equals(R: TRect): Boolean;
+{ Was 16-bit assembler (REP CMPSW over the four coordinate words). }
+begin
+  Equals := (A.X = R.A.X) and (A.Y = R.A.Y) and
+            (B.X = R.B.X) and (B.Y = R.B.Y);
 end;
 
-function TRect.Empty: Boolean; assembler;
-asm
-        LES     DI,Self
-        MOV     AL,1
-        MOV     DX,ES:[DI].TRect.A.X
-        CMP     DX,ES:[DI].TRect.B.X
-        JGE     @@1
-        MOV     DX,ES:[DI].TRect.A.Y
-        CMP     DX,ES:[DI].TRect.B.Y
-        JGE     @@1
-        DEC     AX
-@@1:
+function TRect.Empty: Boolean;
+{ Was 16-bit assembler; empty when either extent is degenerate. }
+begin
+  Empty := (A.X >= B.X) or (A.Y >= B.Y);
 end;
 
 {$ENDIF}

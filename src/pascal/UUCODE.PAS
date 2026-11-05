@@ -49,6 +49,7 @@
 {$ENDIF}
 
 unit UUCode;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -65,20 +66,37 @@ implementation
 uses Dos
 {$IFDEF DN}
      ,Objects, Advance, Views, StartUp, Dialogs, xTime,
-     DNApp, Drivers, Gauge, Messages, Commands, RStrings, FileCopy,
-     HistList, DNStdDlg, DNUtil
+     DNApp, Drivers, Gauge, DnMessages, Commands, RStrings, FileCopy,
+     HistList, DNStdDlg, DNUtil, Memory
 {$ENDIF};
 
+{ 5A pop dx / 58 pop ax / F7 E2 mul dx -> DX:AX, UNSIGNED (Word operands).
+  The Longint casts are required: Word*Word would wrap at 16 bits. }
+{$IFDEF FPC}
+function longmul(X, Y: Word): Longint;
+begin
+  longmul := Longint(X) * Longint(Y);
+end;
+{$ELSE}
 function longmul(X, Y: Word): Longint; inline($5A/$58/$f7/$E2);
+{$ENDIF}
 
 
 const
   TmpExt = 'UUS';
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither) }
+  MaxAvail := {$IFDEF DN}MemAdjust{$ENDIF}(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := {$IFDEF DN}MemAdjust{$ENDIF}(System.MaxAvail);
 end;
+{$ENDIF}
 
 
 {$IFDEF DN}
@@ -164,8 +182,22 @@ type
         TFileArr = array[1..1500] of TFile;
         PFileArr = ^TFileArr;
 
+{ 58 pop ax (a2) / 5B pop bx (a1) / 3B C3 cmp ax,bx /
+  7C(jl) or 7F(jg) skip / 93 xchg ax,bx  -> signed min / max }
+{$IFDEF FPC}
+function Min(a1,a2:integer):integer;
+begin
+  if a1 < a2 then Min := a1 else Min := a2;
+end;
+
+function Max(a1,a2:integer):integer;
+begin
+  if a1 > a2 then Max := a1 else Max := a2;
+end;
+{$ELSE}
 function  Min(a1,a2:integer):integer;inline($58/$5B/$3B/$C3/$7C/$01/$93);
 function  Max(a1,a2:integer):integer;inline($58/$5B/$3B/$C3/$7F/$01/$93);
+{$ENDIF}
 
 const
         GrowStep=16;
@@ -254,6 +286,27 @@ var f:file;begin Assign(f,FName);Erase(f) end;
 procedure RenameFile(const Name1,Name2:PathStr);
 var f:file; begin Assign(f,Name1);Rename(f,Name2) end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function GetASCIIZ(var Buf):PathStr;
+var
+  PB, PR: PByteArray;
+  S: PathStr;
+  Cnt, Idx: Byte;
+begin
+  PR := PByteArray(@S);
+  PB := PByteArray(@Buf);
+  Cnt := 0;
+  Idx := 0;
+  while PB^[Idx] <> 0 do
+  begin
+    PR^[Cnt] := PB^[Idx];
+    Inc(Cnt);
+    Inc(Idx);
+  end;
+  PR^[0] := Cnt;
+  GetASCIIZ := S;
+end;
+{$ELSE}
 function GetASCIIZ(var Buf):PathStr;assembler;
 asm
         push    ds
@@ -270,6 +323,7 @@ asm
         mov     es:[di],ah
         pop     ds
 end;
+{$ENDIF}
 
 procedure PrepareWrite;
 begin OutBufPos:=65535;GetMem(POutBuf,OutBufSize) end;
@@ -364,6 +418,24 @@ begin
  Inc(Index);
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure CalcBufCRC(var Buf;Size:word;var PrevSum:word);
+var
+  P: PByteArray;
+  I: Word;
+  V: Word;
+begin
+  if Size = 0 then Exit;
+  P := PByteArray(@Buf);
+  V := PrevSum;
+  for I := 0 to Size - 1 do
+  begin
+    V := (V shr 1) or ((V and 1) shl 15);
+    Inc(V, P^[I]);
+  end;
+  PrevSum := V;
+end;
+{$ELSE}
 procedure CalcBufCRC(var Buf;Size:word;var PrevSum:word);assembler;
 asm
         mov     cx,Size
@@ -381,6 +453,7 @@ asm
         mov     word ptr es:[di],dx
  @@End:
 end;
+{$ENDIF}
 
 function SmartDIV(L:LongInt;W:Word):Word;assembler;
 asm      mov     ax,word ptr [L+0]
@@ -415,6 +488,45 @@ begin
  EndOfFile:=InputStream^.Eof;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function UUString(var s:string;var CRC:word):Boolean;
+var
+  L: Byte;
+  I: Integer;
+  V: Word;
+  C: Byte;
+  Buf: PByteArray;
+begin
+  UUString := False;
+  V := CRC;
+  L := Length(s);
+  Buf := PByteArray(@s);
+  FillChar(Buf^[L + 1], 70, 0);
+
+  C := Byte(s[1]);
+  V := (V shr 1) or ((V and 1) shl 15);
+  Inc(V, C);
+  if (C < Ord('!')) or (C > Ord('`')) then Exit;
+  Buf^[1] := Byte((C - Ord(' ')) and $3F);
+
+  I := 2;
+  while I <= L do
+  begin
+    C := Byte(s[I]);
+    if C = 0 then Break;
+    V := (V shr 1) or ((V and 1) shl 15);
+    Inc(V, C);
+    if (C < Ord(' ')) or (C > Ord('`')) then Exit;
+    Buf^[I] := Byte((C - Ord(' ')) and $3F);
+    Inc(I);
+  end;
+
+  V := (V shr 1) or ((V and 1) shl 15);
+  Inc(V, 10);
+  CRC := V;
+  UUString := True;
+end;
+{$ELSE}
 function UUString(var s:string;var CRC:word):Boolean;assembler;
 asm
         cld
@@ -470,7 +582,25 @@ asm
         mov     al,1
 @@End:  pop     ds
 end;
+{$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MemEqu(var A,B; Size : Word) : Boolean;
+var
+  PA, PB: PByteArray;
+  I: Word;
+begin
+  MemEqu := True;
+  PA := PByteArray(@A);
+  PB := PByteArray(@B);
+  for I := 0 to Size - 1 do
+    if PA^[I] <> PB^[I] then
+    begin
+      MemEqu := False;
+      Exit;
+    end;
+end;
+{$ELSE}
 function MemEqu(var A,B; Size : Word) : Boolean; assembler;
 asm      push  ds
          cld
@@ -483,6 +613,7 @@ asm      push  ds
          dec   al
 @@EQ:    pop   ds
 end;
+{$ENDIF}
 
 procedure DelTBeg(b:byte);begin Delete(StrT,1,b) end;
 
@@ -820,6 +951,24 @@ begin
  FileTimeKnown:=On;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure CalcLnCRC(var Strng:string;var CRC:word);
+var
+  I: Integer;
+  V: Word;
+begin
+  if Length(Strng) = 0 then Exit;
+  V := CRC;
+  for I := 1 to Length(Strng) do
+  begin
+    V := (V shr 1) or ((V and 1) shl 15);
+    Inc(V, Byte(Strng[I]));
+  end;
+  V := (V shr 1) or ((V and 1) shl 15);
+  Inc(V, 10);
+  CRC := V;
+end;
+{$ELSE}
 procedure CalcLnCRC(var Strng:string;var CRC:word);assembler;
 asm
         cld
@@ -841,6 +990,7 @@ asm
         mov     word ptr es:[di],dx
  @@End: pop     ds
 end;
+{$ENDIF}
 
 
 procedure CheckSum;
@@ -1050,6 +1200,27 @@ begin
  until Off;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure DecodeStr(var Src,Dst);
+var
+  S, D: PByteArray;
+  I: Integer;
+  C0, C1, C2, C3: Byte;
+begin
+  S := PByteArray(@Src);
+  D := PByteArray(@Dst);
+  for I := 0 to 14 do
+  begin
+    C0 := S^[I * 4];
+    C1 := S^[I * 4 + 1];
+    C2 := S^[I * 4 + 2];
+    C3 := S^[I * 4 + 3];
+    D^[I * 3]     := Byte((C0 shl 2) or (C1 shr 4));
+    D^[I * 3 + 1] := Byte((C1 shl 4) or (C2 shr 2));
+    D^[I * 3 + 2] := Byte((C2 shl 6) or C3);
+  end;
+end;
+{$ELSE}
 procedure DecodeStr(var Src,Dst);assembler;
 var     Cnt:byte;
 asm
@@ -1082,6 +1253,7 @@ asm
         jnz     @@L
         pop     ds
 end;
+{$ENDIF}
 
 procedure OutString;
 var b:array[1..45] of byte;
@@ -1435,6 +1607,7 @@ type
                            1: (w0,w1,w2,w3 : word);
                           end;
 
+{$IFDEF CPUI8086}
 procedure Prepare1Str(var Sou,Dst);near;external;
 function  GetUUxlt(b:byte):char;near;external;
 function  GetLnCrc(var Buf;Size:word):Char;near;external;
@@ -1452,6 +1625,21 @@ asm             mov     ax,word ptr [L+0]
                 inc     ax
 @@Exit:
 end;
+{$ELSE}
+procedure Prepare1Str(var Sou,Dst); begin end;
+function  GetUUxlt(b:byte):char; begin GetUUxlt := #0; end;
+function  GetLnCrc(var Buf;Size:word):Char; begin GetLnCrc := #0; end;
+procedure cCrc(var Buf;Size:word;var PrevSum:word); begin end;
+procedure Crc64(var Buf;Size:word;var PrevSum;var Cnt:word); begin end;
+procedure Clear64(n:T64); begin end;
+
+function SmartDIV(L:LongInt;W:Word):Word;
+begin
+  if W = 0 then SmartDIV := 0
+  else if (L mod W) <> 0 then SmartDIV := (L div W) + 1
+  else SmartDIV := L div W;
+end;
+{$ENDIF}
 
 procedure UuEncode(const FName: String);
 type
@@ -1611,6 +1799,13 @@ begin
  EncSize:=Kb2(LongMul((OutBufSize-SectNZ),NumSect+1));
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function GetDecimal(Number:word):string; {Set 2-b}
+begin
+  GetDecimal := Chr(Byte(Number div 10) + Ord('0')) +
+                Chr(Byte(Number mod 10) + Ord('0'));
+end;
+{$ELSE}
 function GetDecimal(Number:word):string;assembler; {Set 2-b}
 asm
         cld
@@ -1623,6 +1818,7 @@ asm
         add     ax,3030h
         stosw
 end;
+{$ENDIF}
 
 function GetMonth(Month:word):string;
 begin
@@ -1743,38 +1939,18 @@ if not All then
  end else WriteLnT(o+GetLnEnd);
 end;
 
-procedure Hex8Lo(L:longInt;var HexLo);assembler;
-asm
-        cld
-        les     di,[HexLo]
-        lea     bx,[LoHexChar]
-        mov     dx,[word ptr L+2]
-        call    @@OutWord
-        mov     dx,[word ptr L+0]
-        call    @@OutWord
-        jmp     @@End
-
-@@OutWord:      {DX-word}
-        mov     ax,dx
-        mov     cl,12
-        shr     ax,cl
-        xlat
-        stosb
-        mov     al,dh
-        and     al,0Fh
-        xlat
-        stosb
-        mov     al,dl
-        mov     cl,4
-        shr     al,cl
-        xlat
-        stosb
-        mov     al,dl
-        and     al,0Fh
-        xlat
-        stosb
-        retn
-@@End:
+procedure Hex8Lo(L:longInt;var HexLo);
+{ Was 16-bit assembler (identical algorithm to ADVANCE.PAS Hex8Lo).
+  Writes the 8 lowercase hex digits of L, most significant first. }
+type TB8 = array[0..7] of Char;
+var I, D: Integer;
+begin
+  for I := 0 to 7 do
+  begin
+    D := (L shr ((7 - I) * 4)) and $F;
+    if D < 10 then TB8(HexLo)[I] := Chr(Ord('0') + D)
+    else TB8(HexLo)[I] := Chr(Ord('a') + D - 10);
+  end;
 end;
 
 

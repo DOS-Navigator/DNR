@@ -47,6 +47,7 @@
 {$I DN.DEF}
 
 unit Gauges;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 { Useful gauges: clock and heap available viewer }
 
@@ -88,13 +89,13 @@ const LastHour: Word = $FF;
 
       RTrashCan: TStreamRec = (
        ObjType: otTrashCan;
-       VmtLink: Ofs(TypeOf(TTrashCan)^);
+       VmtLink: TypeOf(TTrashCan);
        Load: @TTrashCan.Load;
        Store: @TTrashCan.Store);
 
       RKeyMacros: TStreamRec = (
        ObjType: otKeyMacros;
-       VmtLink: Ofs(TypeOf(TKeyMacros)^);
+       VmtLink: TypeOf(TKeyMacros);
        Load: @TKeyMacros.Load;
        Store: @TKeyMacros.Store);
 
@@ -129,7 +130,7 @@ procedure PrintFiles(Files: PCollection; Own: PView);
 
 
 implementation
-uses Memory, Tree, Messages, DNApp, Advance, FilesCol, RStrings, Startup;
+uses Memory, Tree, DnMessages, DNApp, Advance, FilesCol, RStrings, Startup;
 
 {$I Version.INC}
 

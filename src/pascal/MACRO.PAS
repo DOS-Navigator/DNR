@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Macro;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Advance, Objects, Views;
@@ -97,7 +98,7 @@ procedure EditDOSEvironment(Env: PByteArray);
 procedure InitEditorHighLight(const FName: String; Editor: PView);
 
 implementation
-uses Messages, Microed, Drivers, Dialogs, Commands, DNHelp, DNApp,
+uses DnMessages, Microed, Drivers, Dialogs, Commands, DNHelp, DNApp,
      RStrings, Startup;
 
 

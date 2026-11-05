@@ -1,0 +1,82 @@
+name: Build and Release DNR
+
+on:
+  push:
+    branches:
+      - main
+      - toolchain-native-windows
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Native Win32 (FPC + NASM)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Free Pascal and NASM
+        run: |
+          choco install freepascal nasm -y
+          $fpc = Get-ChildItem -Path "C:\", "C:\tools", "C:\Program Files" -Filter "fpc.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($fpc) {
+            Write-Host "FPC discovered at: $($fpc.DirectoryName)"
+            echo "$($fpc.DirectoryName)" >> $env:GITHUB_PATH
+          }
+          $nasm = Get-ChildItem -Path "C:\", "C:\tools", "C:\Program Files" -Filter "nasm.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($nasm) {
+            Write-Host "NASM discovered at: $($nasm.DirectoryName)"
+            echo "$($nasm.DirectoryName)" >> $env:GITHUB_PATH
+          }
+
+      - name: Verify Toolchain
+        run: |
+          fpc -iV
+          nasm -v
+
+      - name: Compile DOS Navigator (build.bat)
+        run: |
+          cmd.exe /c "build.bat"
+
+      - name: Verify Monolithic Binary
+        run: |
+          Get-Item build\dn.exe | Select-Object Name, Length, LastWriteTime
+          cmd.exe /c "build\dn.exe /? 2>&1"
+
+      - name: Package Monolithic Binary and Archive
+        run: |
+          New-Item -ItemType Directory -Path "dist" -Force
+          Copy-Item -Path "build\dn.exe" -Destination "dist\dn.exe"
+          Compress-Archive -Path "build\dn.exe", "README.md", "resource" -DestinationPath "dist\dn-win32-x86.zip" -Force
+          Get-ChildItem -Path "dist" | Select-Object Name, Length
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dn-win32-x86-binaries
+          path: |
+            dist/dn.exe
+            dist/dn-win32-x86.zip
+          retention-days: 30
+
+      - name: Publish GitHub Release (Tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
+          Write-Host "Creating GitHub Release for tag: $tag"
+          gh release create $tag "dist\dn.exe" "dist\dn-win32-x86.zip" `
+            --title "DOS Navigator $tag (Native Win32)" `
+            --generate-notes

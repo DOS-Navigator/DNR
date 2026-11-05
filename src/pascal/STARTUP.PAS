@@ -46,6 +46,7 @@
 
 UNIT
   Startup;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 INTERFACE
 
@@ -281,7 +282,7 @@ CONST
 
   RTextCollection: TStreamRec = (
     ObjType: otTextCollection;
-    VmtLink: Ofs(TypeOf(TTextCollection)^);
+    VmtLink: TypeOf(TTextCollection);
     Load:    @TTextCollection.Load;
     Store:   @TTextCollection.Store);
 

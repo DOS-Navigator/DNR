@@ -64,9 +64,10 @@
 }
 
 unit MicroEd;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 interface
 uses
-  Dos, Objects, Drivers, Memory, Views, Messages, DNApp, Advance, Startup,
+  Dos, Objects, Drivers, Memory, Views, DnMessages, DNApp, Advance, Startup,
   Menus, DNStdDlg, Dialogs, Commands, UniWin, RStrings, DNHelp, SBlocks,
   ObjType;
 
@@ -237,37 +238,37 @@ const
 
       RFileEditor: TStreamRec = (
        ObjType: otFileEditor;
-       VmtLink: Ofs(TypeOf(TFileEditor)^);
+       VmtLink: TypeOf(TFileEditor);
        Load: @TFileEditor.Load;
        Store: @TFileEditor.Store);
 
       RInfoLine: TStreamRec = (
        ObjType: otInfoLine;
-       VmtLink: Ofs(TypeOf(TInfoLine)^);
+       VmtLink: TypeOf(TInfoLine);
        Load: @TInfoLine.Load;
        Store: @TInfoLine.Store);
 
       REditWindow: TStreamRec = (
        ObjType: otEditWindow;
-       VmtLink: Ofs(TypeOf(TEditWindow)^);
+       VmtLink: TypeOf(TEditWindow);
        Load: @TEditWindow.Load;
        Store: @TEditWindow.Store);
 
       REditScrollBar: TStreamRec = (
        ObjType: otEditScrollBar;
-       VmtLink: Ofs(TypeOf(TEditScrollBar)^);
+       VmtLink: TypeOf(TEditScrollBar);
        Load: @TEditScrollBar.Load;
        Store: @TEditScrollBar.Store);
 
       REditFrame: TStreamRec = (
        ObjType: otEditFrame;
-       VmtLink: Ofs(TypeOf(TEditFrame)^);
+       VmtLink: TypeOf(TEditFrame);
        Load: @TEditFrame.Load;
        Store: @TEditFrame.Store);
 
       RLineCollection: TStreamRec = (
        ObjType: otLineCollection;
-       VmtLink: Ofs(TypeOf(TLineCollection)^);
+       VmtLink: TypeOf(TLineCollection);
        Load: @TLineCollection.Load;
        Store: @TLineCollection.Store);
 
@@ -319,7 +320,7 @@ type
 const
       REditSaver: TStreamRec = (
        ObjType: 12335;
-       VmtLink: Ofs(TypeOf(TEditSaver)^);
+       VmtLink: TypeOf(TEditSaver);
        Load: @TEditSaver.Load;
        Store: @TEditSaver.Store);
 
@@ -332,7 +333,11 @@ begin
   GetKeyEvent(E); ESC_Pressed := (E.What = evKeyDown) and (E.KeyCode = kbEsc)
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MemAvail: LongInt; begin MemAvail := MemAdjust(Memory.MemAvail) end;
+{$ELSE}
 function MemAvail: LongInt; begin MemAvail := MemAdjust(System.MemAvail) end;
+{$ENDIF}
 
 
 constructor TEditSaver.Load(var S: TStream);
@@ -1747,7 +1752,11 @@ begin
        and  cl, 7
        mov  dl, 1
        shl  dl, cl
-       test dl, ds:[di]
+       { operand order swapped for FPC: x86 TEST r/m,reg has no
+         reg,r/m encoding; TASM silently accepted the reversed
+         order, FPC does not. TEST is symmetric (AND for flags
+         only, no write-back), so this is bit-identical. }
+       test ds:[di], dl
        pop  dx
        pop  di
        jz   @@7
@@ -2324,7 +2333,11 @@ L1:
  procedure BMarking;
  begin
   if not EnableMarking then Exit;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  if (QueryShiftState and 3 <> 0) and not MouseMark then
+  {$ELSE}
   if (mem[0:$417] and 3 <> 0) and not MouseMark then
+  {$ENDIF}
   begin
    if not Marking then begin Sel.A := LastPos; Sel.B := Delta end
                   else Sel.B := Delta;
@@ -2367,7 +2380,11 @@ L1:
   BlockOff;
   InsertBlock(Clipboard, On);
   ChangeLine;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  FlushKbdBuffer;
+  {$ELSE}
   memw[$40:$1C] := memw[$40:$1A];
+  {$ENDIF}
   EnableMarking := On;
  end;
 
@@ -2709,7 +2726,11 @@ L1:
   InsertBlock(Clipboard, On);
 
   ChangeLine;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  FlushKbdBuffer;
+  {$ELSE}
   memw[$40:$1C] := memw[$40:$1A];
+  {$ENDIF}
   EnableMarking := On;
  end;
 
@@ -3208,7 +3229,7 @@ begin
                     (EvStr<>#0#0) and ((CC1 = EvStr) or (CC2 = EvStr)) then
                      begin CFind := True; Break end;
               if CFind then
-               begin CE; Message(Owner, evCommand, EditCommands[I].C, Pointer(EvStr[2])); Exit end;
+               begin CE; Message(Owner, evCommand, EditCommands[I].C, Pointer(PtrUInt(Ord(EvStr[2])))); Exit end;
               if (Event.CharCode>#31) and (Event.CharCode<#255) then InputChar;
    end;
   evBroadcast: case Event.Command of

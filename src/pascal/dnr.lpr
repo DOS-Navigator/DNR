@@ -1,0 +1,4 @@
+program dnr;
+
+begin
+end.

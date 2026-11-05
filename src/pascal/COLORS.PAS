@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Colors;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 interface
 uses Objects, {ColorSel,} DNApp, Dialogs, Drivers, Views, Memory,
      Commands, DNStdDlg, Advance,DNHelp;
@@ -66,7 +67,7 @@ type
      end;
 
 
-implementation uses Messages, RStrings, Drives, Startup;
+implementation uses DnMessages, RStrings, Drives, Startup;
 
 procedure SetHighlightGroups;
  var D: Record S1, S2, S3, S4, S5: String[250]; end;

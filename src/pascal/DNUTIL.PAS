@@ -48,6 +48,7 @@
 {$I DN.DEF}
 
 unit DNUtil;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses
@@ -69,7 +70,7 @@ uses
      Gauges,
      Memory,
      DblWnd,
-     Messages,
+     DnMessages,
      HistList,
      FileFind,
      Commands,
@@ -249,7 +250,7 @@ type
 const
       RDataSaver: TStreamRec = (
        ObjType: otDataSaver;
-       VmtLink: Ofs(TypeOf(TDataSaver)^);
+       VmtLink: TypeOf(TDataSaver);
        Load: @TDataSaver.Load;
        Store: @TDataSaver.Store);
 
@@ -458,11 +459,220 @@ var
   Event: TEvent;
 
 const
-  NumRElms = 136
+  NumRElms = 136 {$IFNDEF Game} -3 {$ENDIF}
   {$IFDEF MODEM}
   +9
   {$ENDIF}
   ;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  RegArray : array[1..NumRElms] of Pointer = (
+
+  @RScroller,
+  @RListViewer,
+
+  { Register Tree }
+  @RTreeView,
+  @RHTreeView,
+  @RTreeWindow,
+  @RTreePanel,
+  @RTreeDialog,
+  @RTreeInfoView,
+  @RTreeReader,
+  @RDirCollection,
+  { Register DblWnd }
+  @RDoubleWindow,
+  { Register DiskInfo }
+  @RDiskInfo,
+  { Register FilesCol }
+  @RFilesCollection,
+  { Register FlPanel }
+  @RFilePanel,
+  @FlPanel.RInfoView,
+  @RTopView,
+  @RSeparator,
+  @RSpecScroll,
+  @RDriveLine,
+  @RArvidDrive,
+  @RDirStorage,
+  { Register FViewer}
+  @RFileViewer,
+  @RViewInfo,
+  @RFileWindow,
+  @RViewScroll,
+  @RHFileViewer,
+  { Register Menus }
+  @RMenuBar,
+  @RMenuBox,
+  @RStatusLine,
+  @RMenuPopup,
+  { Register Dialogs }
+  @RDialog,
+  @RInputLine,
+  @RButton,
+  @RCluster,
+  @RRadioButtons,
+  @RCheckBoxes,
+  @RListBox,
+  @RStaticText,
+  @RLabel,
+  @RHistory,
+  @RParamText,
+  { Register ColorSel }
+
+  @RColorSelector,
+  @RMonoSelector,
+  @RColorDisplay,
+  @RColorGroupList,
+  @RColorItemList,
+  @RColorDialog,
+  @R_BWSelector,
+
+  { Register HelpFile }
+  @RHelpTopic,
+  @RHelpIndex,
+  { Register Trash }
+  @RTrashCan,
+  @RKeyMacros,
+  { Validate registration }
+  @RRangeValidator,
+  @RPhoneCollection,
+  @RPhone,
+  @RPhoneDir,
+  @RDStringView,
+{$IFDEF Modem}
+  @RLinker,
+  @RLinkDrive,
+  @RDialBox,
+  @RAutoDialer,
+  @RScrollBackWindow,
+  @RScrollBack,
+{$ENDIF}
+  { Register MicroEd }
+  @RXFileEditor,
+  @REditWindow,
+  @RInfoLine,
+  @REditScrollBar,
+  @REditFrame,
+  @RLineCollection,
+
+{$IFDEF SpreadSheet}
+  @RCellCollection,
+  @RCalcWindow,
+  @RCalcView,
+  @RCalcInfo,
+  @Calc.RInfoView,
+{$ENDIF}
+
+{ Register Claculator }
+  @RCalcLine,
+  @RIndicator,
+
+  { Register Terminal }
+{$IFDEF Modem}
+  @RTerminal,
+  @RPortInfo,
+  @RTerminalWindow,
+{$ENDIF}
+  { Register User Screen }
+  @RUserView,
+  @RUserWindow,
+  { Register Game }
+{$IFDEF Game}
+  @RGameInfo,
+  @RGameView,
+  @RGameWindow,
+{$ENDIF}
+
+  @RDrive,
+  @RFindDrive,
+  @RArcDrive,
+  @RFileInfo,
+  @RTempDrive,
+
+{$IFDEF PrintManager}
+  { Register PrintManager}
+  @RStringCol,
+  @RPrintManager,
+  @RPrintStatus,
+  @RPMWindow,
+{$ENDIF}
+
+  { Register Setups }
+  @RSysDialog,
+  @RCurrDriveInfo,
+  @RMouseDialog,
+  @RMouseBar,
+  @RSaversDialog,
+  @RSaversListBox,
+  @RUpperTable,
+
+  @RUserSaver,
+
+  { Register Archivers }
+  @RARJArchiver,
+  @RZIPArchiver,
+  @RSQZArchiver,
+  @RHAPArchiver,
+
+  @RHAArchiver,
+  @RRARArchiver,
+  @RTARArchiver,
+  @RHYPArchiver,
+  @RHPKArchiver,
+
+  @RZOOArchiver,
+  @RARCArchiver,
+  @RLHAArchiver,
+  @RUC2Archiver,
+
+  @RBSAArchiver,
+  @RBS2Archiver,
+  @RCHZArchiver,
+  @RLIMArchiver,
+
+  @RArchiveCollection,
+
+  @RTable,
+  @RReport,
+  @RASCIIChart,
+
+  {$IFDEF CDPlayer}
+  @RCdPlayer,
+  @RCdCounter,
+  {$ENDIF}
+
+  @RTFieldListBox,
+  @RDBWindow,
+  @RDBViewer,
+  @RDBIndicator,
+
+  @RFilterValidator,
+  @RRangeValidator,
+
+  @REditHistoryCol,
+  @RViewHistoryCol,
+
+  @RDataSaver,
+  @RStringList,
+
+ {Objects}
+  @RCollection,
+  @RStringCollection,
+  @RStrCollection,
+
+ {Views}
+  @RView,
+  @RFrame,
+  @RScrollBar,
+  @RGroup,
+  @RWindow,
+
+ {App}
+  @RBackground,
+  @RDesktop,
+  @RStringCache
+ );
+{$ELSE}
   RegArray : array[1..NumRElms] of Word = (
 
   Ofs(RScroller),
@@ -670,12 +880,17 @@ const
   Ofs(RDesktop),
   Ofs(RStringCache)
  );
+{$ENDIF}
 
 procedure RegisterAll;
 var
   I: Integer;
 begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+  for I := 1 to NumRElms do RegisterType(PStreamRec(RegArray[I])^);
+{$ELSE}
   for I := 1 to NumRElms do RegisterType(PStreamRec(Ptr(DSEG,RegArray[I]))^);
+{$ENDIF}{$ENDIF}
 end;
 
 begin
@@ -855,6 +1070,7 @@ begin
  SaveHistories;
  HideCommandLine := (CommandLine <> nil) and not CommandLine^.GetState(sfVisible);
  B := $8000 or (Byte(HideCommandLine));
+{$IFDEF CPUI8086}
  asm
    mov ax, $9906
    mov dx, B
@@ -862,6 +1078,7 @@ begin
    int  2Fh
    pop  BP
  end;
+{$ENDIF}
  inherited Done;
 {$IFDEF Modem}
  SetBlink(StartupData.Unload and osuBlinking <> 0);
@@ -1125,7 +1342,7 @@ begin
     S^.Read(R.A,2 * SizeOf(LongInt));
     Clock^.Locate(R);
     {S^.Read(ArcFlags, 4);}
-    if B then begin TrashCan^.Show; {Lister^.Show;} end;
+    if B and (TrashCan <> nil) then begin TrashCan^.Show; {Lister^.Show;} end;
     If BB then
        begin
          R.Assign(0, Byte( InterfaceData.Options and ouiHideMenu = 0 ), Size.X, Size.Y
@@ -1140,7 +1357,7 @@ begin
       Msg(erDesktopError, nil, mfOkButton + mfError);
     end;
     }
-    if B then begin S^.Read(R.A, 2 * SizeOf(LongInt)); TrashCan^.Locate(R) end;
+    if B and (TrashCan <> nil) then begin S^.Read(R.A, 2 * SizeOf(LongInt)); TrashCan^.Locate(R) end;
   end;
   Desktop^.Redraw;
   GetBounds(R);
@@ -1198,12 +1415,12 @@ begin
     StoreDesktop(S^);
     S^.Write(TempBounds, SizeOf(TempBounds));
     {S^.Write(ArcBounds, SizeOf(TempBounds));}
-    B := TrashCan^.GetState(sfVisible);
+    if TrashCan <> nil then B := TrashCan^.GetState(sfVisible) else B := False;
     S^.Write(B, 1);
     S^.Put(KeyMacroses);
     Clock^.GetBounds(R);
     S^.Write(R.A, 2 * SizeOf(LongInt));
-    TrashCan^.GetBounds(R);
+    if TrashCan <> nil then TrashCan^.GetBounds(R);
     if B then S^.Write(R.A, 2 * SizeOf(LongInt));
     {S^.Write(ArcFlags, 4);}
     if S^.Status <> stOk then
@@ -1404,6 +1621,7 @@ var
   R: TRect;
   WS: Word;
 begin
+{$IFDEF CPUI8086}
   asm
     mov  ax, 9906h
     xor  dx, dx
@@ -1413,6 +1631,9 @@ begin
     pop  bp
     mov  WS, cx
   end;
+{$ELSE}
+  WS := 0;
+{$ENDIF}
   HideCommandLine := (WS and cdnHideCmdLine <> 0);
   DisableCommands(DblWndCommands);
   GetExtent(R);
@@ -1498,10 +1719,10 @@ PROCEDURE TDNApplication.HandleCommand;
     if S = '' then Exit;
     S[1] := Char(Byte(S[1])-64);
    end;
-  if TrashCan^.GetState(sfVisible) then Desktop^.Delete(TrashCan);
+  if TrashCan <> nil then if TrashCan^.GetState(sfVisible) then Desktop^.Delete(TrashCan);
   P := New(PXDoubleWindow, Init(R, 0, Byte(S[1])));
   if Abort then Dispose(P, Done) else InsertWindow(PWindow(P));
-  if TrashCan^.GetState(sfVisible) then Desktop^.Insert(TrashCan);
+  if TrashCan <> nil then if TrashCan^.GetState(sfVisible) then Desktop^.Insert(TrashCan);
  end;
 
 
@@ -1839,7 +2060,7 @@ PROCEDURE TDNApplication.HandleCommand;
       CE;
     end;
 begin
-   ST := PString(Event.InfoPtr)^;
+   if Event.InfoPtr <> nil then ST := PString(Event.InfoPtr)^ else ST := '';
    case Event.Command of
      cmFirstTimePanel: OpenWindow( False );
      cmPutInClipboard: PutInClip;
@@ -1910,9 +2131,10 @@ begin
      cmStartup: StartupSetup;
      cmSetupMouse: MouseSetup;
      cmSaversSetup: SaversSetup;
-     cmHideShowTools: if TrashCan^.GetState(sfVisible)
-                        then TrashCan^.Hide
-                        else TrashCan^.Show;
+     cmHideShowTools: if TrashCan <> nil then
+                        if TrashCan^.GetState(sfVisible)
+                          then TrashCan^.Hide
+                          else TrashCan^.Show;
      cmReanimator: if (SystemData.Drives[ GetCurDrive ] and ossDirectAccess <> 0)  and CheckDisk(GetCurDrive)
                      then OpenReanimator
                      else Denie;
@@ -1960,7 +2182,7 @@ begin
      cmCreatePanel: OpenWindow(True);
      cmCreateTree: OpenTreeWindow;
      cmFindFile: FindFile;
-     cmFormatDisk: AddFormat;
+     { cmFormatDisk removed: already handled by RunFormat above (line ~1850); TP matched first, so this occurrence - and the AddFormat call it made - was dead }
      cmSystemInfo: SystemInfo;
      cmMemoryInfo: MemoryInfo;
      cmShowOutput: GetUserScreen;

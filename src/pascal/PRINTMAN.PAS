@@ -45,10 +45,11 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit PrintManager;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
-uses Objects, Views, Drivers, DNApp, Advance, Dialogs, DOS, Messages,
+uses Objects, Views, Drivers, DNApp, Advance, Dialogs, DOS, DnMessages,
      Commands, ObjType;
 
  type
@@ -105,25 +106,25 @@ const Printer: PPrintManager = nil;
 
       RStringCol: TStreamRec = (
        ObjType: otStringCol;
-       VmtLink: Ofs(TypeOf(TStringCol)^);
+       VmtLink: TypeOf(TStringCol);
        Load: @TStringCol.Load;
        Store: @TStringCol.Store);
 
       RPrintManager: TStreamRec = (
        ObjType: otPrintManager;
-       VmtLink: Ofs(TypeOf(TPrintManager)^);
+       VmtLink: TypeOf(TPrintManager);
        Load: @TPrintManager.Load;
        Store: @TPrintManager.Store);
 
       RPrintStatus: TStreamRec = (
        ObjType: otPrintStatus;
-       VmtLink: Ofs(TypeOf(TPrintStatus)^);
+       VmtLink: TypeOf(TPrintStatus);
        Load: @TPrintStatus.Load;
        Store: @TPrintStatus.Store);
 
       RPMWindow: TStreamRec = (
        ObjType: otPMWindow;
-       VmtLink: Ofs(TypeOf(TPMWindow)^);
+       VmtLink: TypeOf(TPMWindow);
        Load: @TPMWindow.Load;
        Store: @TPMWindow.Store);
 

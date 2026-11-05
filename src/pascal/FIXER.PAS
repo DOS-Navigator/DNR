@@ -45,10 +45,11 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Fixer;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
-uses Objects, Views, Drivers, Dos, Memory, Menus, Messages, DiskTool, HideView,
+uses Objects, Views, Drivers, Dos, Memory, Menus, DnMessages, DiskTool, HideView,
      Advance, Dialogs, Commands, DNApp, DNStdDlg, FViewer, RStrings,
      SWE, Tree, FilesCol, Validate, UniWin, DNHelp;
 
@@ -634,7 +635,7 @@ procedure TDiskFixer.HandleEvent;
   if Drv^.FATCopies > 1 then
     S := S+SStr(Drv^.Reserved+Drv^.SecFAT, 5, ' ')+' - '
           +AddSpace(ItoS(Drv^.Reserved+2*Drv^.SectPerFAT-1), 5)+GetString(dlS2ndFAT)+^M;
-  S := S + +SStr(Drv^.Reserved+Drv^.FATCopies*Drv^.SectPerFAT, 5, ' ')+' - '
+  S := S + SStr(Drv^.Reserved+Drv^.FATCopies*Drv^.SectPerFAT, 5, ' ')+' - '
           +AddSpace(ItoS(Drv^.Reserved+Drv^.FATCopies*Drv^.SectPerFAT+(LongInt(Drv^.RootEntries)*32)
                        div Drv^.SectLen - 1), 5)+GetString(dlRootDirectory);
   P := New(PStaticText, Init(R, S));
@@ -905,7 +906,8 @@ begin
                                  11: XPos := W+9;
                                  22..25: XPos := W+3;
                                  26..27: XPos := W+2;
-                                 26..29: XPos := W+8;
+                                 { was 26..29 - overlapped the arm above; TP matched first, so only 28..29 ever reached it }
+                                 28..29: XPos := W+8;
                                   else XPos := W;
                                 end;
                                 ViewMode := 2; DrawView; CE end;

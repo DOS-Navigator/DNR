@@ -45,12 +45,13 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit DnFormat;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {$DEFINE nFAST}
 
 interface
 
-     uses Objects,Drivers,Dialogs,Views,Advance,Gauge,DnApp,Messages,
+     uses Objects,Drivers,Dialogs,Views,Advance,Gauge,DnApp,DnMessages,
           Format, Commands;
 
 type

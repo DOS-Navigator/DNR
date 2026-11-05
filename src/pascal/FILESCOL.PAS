@@ -48,6 +48,7 @@
 {$I DN.DEF}
 
 unit FilesCol;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
  uses Objects, Memory, DOS, Startup, DNHelp, Advance, ObjType;
@@ -110,7 +111,7 @@ const
 
       RFilesCollection: TStreamRec = (
        ObjType: otFilesCollection;
-       VmtLink: Ofs(TypeOf(TFilesCollection)^);
+       VmtLink: TypeOf(TFilesCollection);
        Load: @TFilesCollection.Load;
        Store: @TFilesCollection.Store);
 
@@ -389,12 +390,20 @@ begin
     Inc(N);
    end;
  if not (Default in ['A'..'Z']) and not ((Default = '+') and (Lnk <> nil)) then
+{$IFDEF CPUI8086}
  asm
   mov ah, 19h
   int 21h
   add al, 'A'
   mov C, al
- end else C := Default;
+ end
+{$ELSE}
+ begin
+  GetDir(0, FreeStr);
+  C := UpCase(FreeStr[1]);
+ end
+{$ENDIF}
+ else C := Default;
  Menu := NewMenu(Items);
  DeskTop^.GetExtent(R);
  R.A.X := X; R.A.Y := Y;
@@ -417,47 +426,32 @@ end;
  var Q: Str5;
 
 function GetFileType(const S: String; Attr: Byte): Integer;
+var
+  Ext: String;
+  I: Integer;
 begin
   if Attr and Directory <> 0 then GetFileType := ttDirectory else
   begin
     GetFileType := 0;
-    asm
-      cld
-      les   si, S
-      mov   di, offset Q + 2
-      mov   ah, [es:si]
-      sub   ah, 9
-      ja    @o
-   @t:mov   word ptr [Q+0],0003h
-      mov   word ptr [Q+2],002Eh {'.'}
-      jmp   @e
-   @o:add   si,10
-   @1:mov   al, [es:si]
-      inc   si
-      cmp   al, ' '
-      je    @S
-      mov   ds:[di], al
-      inc   di
-   @S:dec   ah
-      jnz   @1
-      mov   byte ptr ds:[di],0
-      sub   di, offset Q
-      cmp   di,3
-      jl    @t
-      mov   word ptr Q, di
-   @e:
+    Ext := '';
+    if Length(S) >= 10 then
+    begin
+      for I := 10 to Length(S) do
+        if S[I] <> ' ' then Ext := Ext + S[I];
     end;
-
-   if Pos(Q, Executables) <> 0 then GetFileType := ttExec else
+    if Ext <> '' then Q := '.' + Ext
+    else Q := '.';
+    UpStr(Q);
+    if Pos(Q, Executables) <> 0 then GetFileType := ttExec else
     if (Pos(Q, Archives) <> 0) or
-          (((Q[2] = 'a') or (Q[2] = 'r'))
+          (((Length(Q) >= 4) and ((Q[2] = 'A') or (Q[2] = 'R'))
             and (Q[3] >= '0') and (Q[4] >= '0')
-            and (Q[3] <= '9') and (Q[4] <= '9')) then GetFileType := ttArc
+            and (Q[3] <= '9') and (Q[4] <= '9'))) then GetFileType := ttArc
     else if Pos(Q, CustomMask1) <> 0 then GetFileType := ttCust1
     else if Pos(Q, CustomMask2) <> 0 then GetFileType := ttCust2
     else if Pos(Q, CustomMask3) <> 0 then GetFileType := ttCust3
     else if Pos(Q, CustomMask4) <> 0 then GetFileType := ttCust4
-    else if Pos(Q, CustomMask5) <> 0 then GetFileType := ttCust5
+    else if Pos(Q, CustomMask5) <> 0 then GetFileType := ttCust5;
   end;
 end;
 

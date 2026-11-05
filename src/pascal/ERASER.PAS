@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 UNIT ERASER;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Objects;
@@ -54,7 +55,7 @@ uses Objects;
  function  ValidErase(Files: PCollection): Boolean;
 
 implementation
-uses Dos, FilesCol, Commands, Advance, Startup, DiskTool, Messages, xTime,
+uses Dos, FilesCol, Commands, Advance, Startup, DiskTool, DnMessages, xTime,
      Drivers, Tree, Memory, DNApp, Gauge, Views, RStrings, Dialogs, Drives,
      FileCopy;
 

@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit FlPanel;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Objects, Views, Drivers, Dos, Eraser, FilesCol, HideView,
@@ -113,37 +114,37 @@ type
 const
       RFilePanel: TStreamRec = (
        ObjType: otFilePanel;
-       VmtLink: Ofs(TypeOf(TFilePanel)^);
+       VmtLink: TypeOf(TFilePanel);
        Load: @TFilePanel.Load;
        Store: @TFilePanel.Store);
 
       RInfoView: TStreamRec = (
        ObjType: otFlPInfoView;
-       VmtLink: Ofs(TypeOf(TInfoView)^);
+       VmtLink: TypeOf(TInfoView);
        Load: @TInfoView.Load;
        Store: @TInfoView.Store);
 
       RTopView: TStreamRec = (
        ObjType: otTopView;
-       VmtLink: Ofs(TypeOf(TTopView)^);
+       VmtLink: TypeOf(TTopView);
        Load: @TTopView.Load;
        Store: @TTopView.Store);
 
       RSeparator: TStreamRec = (
        ObjType: otSeparator;
-       VmtLink: Ofs(TypeOf(TSeparator)^);
+       VmtLink: TypeOf(TSeparator);
        Load: @TSeparator.Load;
        Store: @TSeparator.Store);
 
       RSpecScroll: TStreamRec = (
        ObjType: otSpecScroll;
-       VmtLink: Ofs(TypeOf(TSpecScroll)^);
+       VmtLink: TypeOf(TSpecScroll);
        Load: @TSpecScroll.Load;
        Store: @TSpecScroll.Store);
 
       RDriveLine: TStreamRec = (
        ObjType: otDriveLine;
-       VmtLink: Ofs(TypeOf(TDriveLine)^);
+       VmtLink: TypeOf(TDriveLine);
        Load: @TDriveLine.Load;
        Store: @TDriveLine.Store);
 
@@ -162,7 +163,7 @@ VAR
 
 implementation
 
-uses DNApp, Advance, Startup, Memory, FileCopy, Messages, Menus, DiskInfo,
+uses DNApp, Advance, Startup, Memory, FileCopy, DnMessages, Menus, DiskInfo,
      Dialogs, Commands, HistList, Tree, FBB, RStrings, UUCode,
      ArcView, CmdLine, Histries, Archiver, Gauges, Gauge, FileFind, FlTools;
 
@@ -173,7 +174,11 @@ procedure TSpecScroll.HandleEvent;
 begin
  if (Event.What = evKeyDown) and
     ((Event.CharCode in [^E,^S,^D,^X]) or
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+     (Event.CharCode = #0) and ((QueryShiftState and 3 <> 0) xor
+{$ELSE}
      (Event.CharCode = #0) and ((mem[0:$417] and 3 <> 0) xor
+{$ENDIF}{$ENDIF}
      (FMSetup.Options and fmoUseArrows = 0) and
      ((Event.KeyCode = kbRight) or (Event.KeyCode = kbLeft) or
       (Event.KeyCode = kbHome) or (Event.KeyCode = kbEnd)
@@ -474,6 +479,7 @@ procedure TFilePanel.Draw;
   var P: PFileRec;
       CC: Byte;
       JJ: Integer;
+       _k: Integer;
  begin
    JJ := J*LineLength;
    if (Files <> nil) and (Idx < Files^.Count) then
@@ -481,7 +487,8 @@ procedure TFilePanel.Draw;
       P := Files^.At(Idx);
       CC := HLC[P^.TType];
       if (Idx = CurPos) then begin LastCurPos.X := JJ; LastCurPos.Y := I+1 end;
-      asm
+      {$IFDEF CPUI8086}
+asm
        les bx, P
        mov ax, Idx
        cmp ax, CurPos
@@ -499,9 +506,20 @@ procedure TFilePanel.Draw;
      @@2:
        mov C, al
       end;
+{$ELSE}
+      if Idx = CurPos then
+      begin
+        if P^.Selected then C := C5 else C := C4;
+      end
+      else
+      begin
+        if P^.Selected then C := C3 else C := CC;
+      end;
+{$ENDIF}
       if QuickSearch then if (Idx = CurPos) then
         begin SetCursor(JJ+SearchX, I); ShowCursor; NormalCursor end;
       if LineLength = 13 then
+      {$IFDEF CPUI8086}
       asm
        les bx, P
        lea di, B
@@ -519,7 +537,18 @@ procedure TFilePanel.Draw;
        add di,2
        dec cx
        jnz @@3
-      end else begin
+      end
+{$ELSE}
+      begin
+        for _k := 1 to 12 do
+        begin
+          if _k <= Length(P^.Name) then
+            B[JJ + _k - 1] := (Word(C) shl 8) or Ord(P^.Name[_k])
+          else
+            B[JJ + _k - 1] := (Word(C) shl 8) or Ord(' ');
+        end;
+      end
+{$ENDIF} else begin
         MoveChar(B[JJ], ' ', C, LineLength);
         GetFull(B[JJ], P, C);
       end;
@@ -773,6 +802,8 @@ procedure TInfoView.Draw;
      PF, PPF: PFileRec;
      S, S1: String;
      Y: Integer;
+     _cellIdx, _colLeft: Integer;
+     _ch: Char;
 
  var FR: TFileRec;
 
@@ -786,7 +817,8 @@ begin
  if FMSetup.Show and fmsDivider <> 0 then
  begin
   Y := 1;
-  asm
+  {$IFDEF CPUI8086}
+   asm
    lea di, B
    mov cx, I
    mov ah, byte ptr C2
@@ -812,6 +844,28 @@ begin
    loop @@1
  @@4:
   end;
+{$ELSE}
+   _cellIdx := 0;
+   while _cellIdx < I do
+   begin
+     _colLeft := C1;
+     while (_cellIdx < I) and (_colLeft > 0) do
+     begin
+       B[_cellIdx] := (Byte(C2) shl 8) or $C4;
+       Inc(_cellIdx);
+       Dec(_colLeft);
+     end;
+     if _cellIdx < I then
+     begin
+       if _cellIdx = I - 1 then
+         _ch := #$C4
+       else
+         _ch := #$C1;
+       B[_cellIdx] := (Byte(C2) shl 8) or Ord(_ch);
+       Inc(_cellIdx);
+     end;
+   end;
+{$ENDIF}
   I := 0; C2 := (C2 shl 8) or Byte('Á');
   if Panel^.LineLength > 13 then
   While I < Size.X do
@@ -863,9 +917,9 @@ begin
      else begin
            if (Panel^.SelectedLen = Panel^.PackedLen) or (Panel^.Drive^.DriveType <> dtArc) then
             S := '~'+FStr(Panel^.SelectedLen)+GetString(dlBytesIn)+
-                 +ItoS(Panel^.SelNum)+'~'+ GetString(dlSelectedfiles) else
+                 ItoS(Panel^.SelNum)+'~'+ GetString(dlSelectedfiles) else
             S := '~'+FStr(Panel^.SelectedLen)+'('+FStr(Panel^.PackedLen)+')'+GetString(dlBytesIn)+
-                +ItoS(Panel^.SelNum)+'~'+ GetString(dlSelectedfiles);
+                ItoS(Panel^.SelNum)+'~'+ GetString(dlSelectedfiles);
           end;
     I := (Size.X - CStrLen(S)) div 2; if I < 0 then I := 0;
     MoveCStr(B[I], S, C3);
@@ -1151,7 +1205,11 @@ begin
         (Event.KeyCode = kbHome) or (Event.KeyCode = kbEnd)))
       then CommandLine^.HandleEvent(Event);
  if Event.What = evNothing then Exit;
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+ I := QueryExtendedShiftState;
+{$ELSE}
  I := mem[$40:$18];
+{$ENDIF}{$ENDIF}
  case Event.What of
   evCommand: case Event.Command of
               cmDoSendLocated: SendLocated;
@@ -1236,7 +1294,10 @@ begin
               cmLViewFile,
               cmFindGotoFile,
               cmAdvancedFilter:*)
-              0..100:;
+              { split to exclude cmClose=4, already handled by its own
+                arm above; TP tolerated the overlap and matched cmClose
+                first, FPC requires case labels to be disjoint }
+              0..3, 5..100:;
                 else CommandHandle(Event);
              end;
   evKeyDown: if (Event.KeyCode = kbDoubleAlt) and (FMSetup.Quick = pqsAlt) or
@@ -1256,7 +1317,12 @@ begin
                  begin
                    if not ((ShiftState and 3 <> 0) and ( not CommandLine^.GetState(sfVisible))) then
                     begin
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+                      { no Win32 equivalent of writing simulated
+                        physical key state }
+{$ELSE}
                       Mem[$40:$18] := I and $BF;
+{$ENDIF}{$ENDIF}
                       ShiftState := ShiftState and kbCapsState;
                     end else ShiftState := ShiftState and $FC;
                    SearchMask[1] := Event.CharCode;

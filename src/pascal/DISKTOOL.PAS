@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 UNIT DISKTOOL;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -161,7 +162,7 @@ type
     function  CheckDisk(C : Char) : Boolean;
 
 implementation
-uses Startup, Messages, Drivers, Memory, DNApp, RStrings, Commands;
+uses Startup, DnMessages, Drivers, Memory, DNApp, RStrings, Commands;
 
  type SecRec = record
        Num   : LongInt;
@@ -169,10 +170,18 @@ uses Startup, Messages, Drivers, Memory, DNApp, RStrings, Commands;
        Buf   : Pointer;
       end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither) }
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
 
 function XlatError(I: Word): Word;

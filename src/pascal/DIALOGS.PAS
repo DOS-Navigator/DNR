@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Dialogs;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {-----------------------------------------------------}
 { This module is based on Turbo Vision Dialogs Unit   }
@@ -496,7 +497,7 @@ function NewSItem(const Str: String; ANext: PSItem): PSItem;
 const
   RDialog: TStreamRec = (
      ObjType: otDialog;
-     VmtLink: Ofs(TypeOf(TDialog)^);
+     VmtLink: TypeOf(TDialog);
      Load:    @TDialog.Load;
      Store:   @TDialog.Store
   );
@@ -504,7 +505,7 @@ const
 const
   RInputLine: TStreamRec = (
      ObjType: otInputLine;
-     VmtLink: Ofs(TypeOf(TInputLine)^);
+     VmtLink: TypeOf(TInputLine);
      Load:    @TInputLine.Load;
      Store:   @TInputLine.Store
   );
@@ -512,7 +513,7 @@ const
 const
   RButton: TStreamRec = (
      ObjType: otButton;
-     VmtLink: Ofs(TypeOf(TButton)^);
+     VmtLink: TypeOf(TButton);
      Load:    @TButton.Load;
      Store:   @TButton.Store
   );
@@ -520,7 +521,7 @@ const
 const
   RCluster: TStreamRec = (
      ObjType: otCluster;
-     VmtLink: Ofs(TypeOf(TCluster)^);
+     VmtLink: TypeOf(TCluster);
      Load:    @TCluster.Load;
      Store:   @TCluster.Store
   );
@@ -528,7 +529,7 @@ const
 const
   RRadioButtons: TStreamRec = (
      ObjType: otRadioButtons;
-     VmtLink: Ofs(TypeOf(TRadioButtons)^);
+     VmtLink: TypeOf(TRadioButtons);
      Load:    @TRadioButtons.Load;
      Store:   @TRadioButtons.Store
   );
@@ -536,7 +537,7 @@ const
 const
   RCheckBoxes: TStreamRec = (
      ObjType: otCheckBoxes;
-     VmtLink: Ofs(TypeOf(TCheckBoxes)^);
+     VmtLink: TypeOf(TCheckBoxes);
      Load:    @TCheckBoxes.Load;
      Store:   @TCheckBoxes.Store
   );
@@ -544,7 +545,7 @@ const
 const
   RMultiCheckBoxes: TStreamRec = (
      ObjType: otMultiCheckBoxes;
-     VmtLink: Ofs(TypeOf(TMultiCheckBoxes)^);
+     VmtLink: TypeOf(TMultiCheckBoxes);
      Load:    @TMultiCheckBoxes.Load;
      Store:   @TMultiCheckBoxes.Store
   );
@@ -552,7 +553,7 @@ const
 const
   RListBox: TStreamRec = (
      ObjType: otListBox;
-     VmtLink: Ofs(TypeOf(TListBox)^);
+     VmtLink: TypeOf(TListBox);
      Load:    @TListBox.Load;
      Store:   @TListBox.Store
   );
@@ -560,7 +561,7 @@ const
 const
   RStaticText: TStreamRec = (
      ObjType: otStaticText;
-     VmtLink: Ofs(TypeOf(TStaticText)^);
+     VmtLink: TypeOf(TStaticText);
      Load:    @TStaticText.Load;
      Store:   @TStaticText.Store
   );
@@ -568,7 +569,7 @@ const
 const
   RLabel: TStreamRec = (
      ObjType: otLabel;
-     VmtLink: Ofs(TypeOf(TLabel)^);
+     VmtLink: TypeOf(TLabel);
      Load:    @TLabel.Load;
      Store:   @TLabel.Store
   );
@@ -576,7 +577,7 @@ const
 const
   RHistory: TStreamRec = (
      ObjType: otHistory;
-     VmtLink: Ofs(TypeOf(THistory)^);
+     VmtLink: TypeOf(THistory);
      Load:    @THistory.Load;
      Store:   @THistory.Store
   );
@@ -584,7 +585,7 @@ const
 const
   RParamText: TStreamRec = (
      ObjType: otParamText;
-     VmtLink: Ofs(TypeOf(TParamText)^);
+     VmtLink: TypeOf(TParamText);
      Load:    @TParamText.Load;
      Store:   @TParamText.Store
   );
@@ -703,6 +704,12 @@ begin
   NewSItem := Item;
 end;
 
+{$IFDEF FPC}
+function Max(A, B: Integer): Integer;
+begin
+  if A > B then Max := A else Max := B;
+end;
+{$ELSE}
 function Max(A, B: Integer): Integer;
 inline(
    $58/     {pop   ax   }
@@ -711,6 +718,7 @@ inline(
    $7F/$01/ {jg    @@1  }
    $93);    {xchg  ax,bx}
        {@@1:            }
+{$ENDIF}
 
 { TInputLine }
 
@@ -1463,6 +1471,15 @@ begin
   TView.Done;
 end;
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function TCluster.ButtonState(Item: Integer): Boolean;
+begin
+  if (Item < 0) or (Item > 31) then
+    ButtonState := False
+  else
+    ButtonState := (EnableMask and (LongInt(1) shl Item)) <> 0;
+end;
+{$ELSE}
 function TCluster.ButtonState(Item: Integer): Boolean; assembler;
 asm
         XOR     AL,AL
@@ -1483,6 +1500,7 @@ asm
         MOV     AL,1
 @@3:
 end;
+{$ENDIF}
 
 function TCluster.DataSize: Word;
 begin
@@ -1696,35 +1714,29 @@ begin
   end;
 end;
 
-procedure TCluster.SetButtonState(AMask: Longint; Enable: Boolean); assembler;
-asm
-        LES     DI,Self
-        MOV     AX,AMask.Word[0]
-        MOV     DX,AMask.Word[2]
-        TEST    Enable,0FFH
-        JNZ     @@1
-        NOT     AX
-        NOT     DX
-        AND     ES:[DI].TCluster.EnableMask.Word[0],AX
-        AND     ES:[DI].TCluster.EnableMask.Word[2],DX
-        JMP     @@2
-@@1:    OR      ES:[DI].TCluster.EnableMask.Word[0],AX
-        OR      ES:[DI].TCluster.EnableMask.Word[2],DX
-@@2:    MOV     CX,ES:[DI].Strings.TCollection.Count
-        CMP     CX,31
-        JA      @@6
-        MOV     BX,ES:[DI].TCluster.Options
-        AND     BX,not ofSelectable
-        MOV     AX,ES:[DI].TCluster.EnableMask.Word[0]
-        MOV     DX,ES:[DI].TCluster.EnableMask.Word[2]
-@@3:    SHR     DX,1
-        RCR     AX,1
-        JC      @@4
-        LOOP    @@3
-        JMP     @@5
-@@4:    OR      BX,ofSelectable
-@@5:    MOV     ES:[DI].TCluster.Options,BX
-@@6:
+procedure TCluster.SetButtonState(AMask: Longint; Enable: Boolean);
+{ Was 16-bit assembler; the SHR/RCR carry loop scanned the first
+  Strings.Count bits of EnableMask for any enabled button. }
+var
+  I: Integer;
+  M: Longint;
+begin
+  if Enable then EnableMask := EnableMask or AMask
+  else EnableMask := EnableMask and not AMask;
+  if Strings.Count <= 31 then
+  begin
+    Options := Options and not ofSelectable;
+    M := 1;
+    for I := 1 to Strings.Count do
+    begin
+      if (EnableMask and M) <> 0 then
+      begin
+        Options := Options or ofSelectable;
+        Break;
+      end;
+      M := M shl 1;
+    end;
+  end;
 end;
 
 procedure TCluster.SetData(var Rec);

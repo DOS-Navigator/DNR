@@ -46,6 +46,7 @@
 
 
 PROGRAM RCP;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {                                     }
 {  Dos Navigator's Resource Compiler  }
@@ -321,7 +322,7 @@ type
 const
   REditSaver: TStreamRec = (
     ObjType: 12335;
-    VmtLink: Ofs(TypeOf(TEditSaver)^);
+    VmtLink: TypeOf(TEditSaver);
     Load: @TEditSaver.Load;
     Store: @TEditSaver.Store);
 
@@ -437,10 +438,14 @@ end;
 
 procedure MakeItem;
   var P: PColorItem;
+      TokName: String;
+      TokId: LongInt;
 begin
    if PL = nil then Error('Color group should be defined first');
    I := Length(idColorItem);
-   P := ColorItem(Token(S, I), GetID(Token(S, I)), nil);
+   TokName := Token(S, I);
+   TokId := GetID(Token(S, I));
+   P := ColorItem(TokName, TokId, nil);
    if PI = nil then PL^.Items := P
                else PI^.Next := P;
    PI := P;
@@ -532,6 +537,15 @@ var
          GetID := L;
        end;
   end;
+
+  procedure AssignRect(var R: TRect; const S: String; var I: Integer);
+  begin
+    R.A.X := GetID(Token(S, I));
+    R.A.Y := GetID(Token(S, I));
+    R.B.X := GetID(Token(S, I));
+    R.B.Y := GetID(Token(S, I));
+  end;
+
   PROCEDURE SetSavers;
     var D: PDialog;
   begin
@@ -549,9 +563,12 @@ var
 
      procedure MakeStatusDef;
       var P: PStatusDef;
+          W1, W2: Word;
      begin
        I := Length(idStatusDef);
-       P := NewStatusDef(GetID(Token(S, I)), GetID(Token(S, I)), nil, nil);
+       W1 := GetID(Token(S, I));
+       W2 := GetID(Token(S, I));
+       P := NewStatusDef(W1, W2, nil, nil);
        if DL = nil then DM := P
                    else DL^.Next := P;
        DL := P;
@@ -560,10 +577,15 @@ var
 
      procedure MakeStatusItem;
        var P: PStatusItem;
+           TStr: String;
+           W1, W2: Word;
      begin
         if DL = nil then Error('Could not make Status Item without Status Definition');
         I := Length(idStatusItem);
-        P := NewStatusKey(Token(S, I), GetID(Token(S, I)), GetID(Token(S, I)), nil);
+        TStr := Token(S, I);
+        W1 := GetID(Token(S, I));
+        W2 := GetID(Token(S, I));
+        P := NewStatusKey(TStr, W1, W2, nil);
         if PL = nil then DL^.Items := P
                     else PL^.Next := P;
         PL := P;
@@ -624,11 +646,16 @@ var
     end;
 
     procedure MakeMenuItem;
-      var HK, Cmd, Ctx: Word;
+      var T1, T2: String;
+          TKey, TCmd, THelp: Word;
     begin
       I := Length(idMenuItem);
-      AddItem(NewItem(Token(S, I), Token(S, I), GetID(Token(S, I)),
-                 GetID(Token(S, I)), GetID(Token(S, I)), nil));
+      T1 := Token(S, I);
+      T2 := Token(S, I);
+      TKey := GetID(Token(S, I));
+      TCmd := GetID(Token(S, I));
+      THelp := GetID(Token(S, I));
+      AddItem(NewItem(T1, T2, TKey, TCmd, THelp, nil));
     end;
 
     procedure MakeMenuLine;
@@ -689,7 +716,7 @@ var
     procedure MakeInputLine;
       var P: PHistory;
     begin
-      R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+      AssignRect(R, S, I);
       R.B.Y := R.A.Y + 1;
       PV := New(PInputLine, Init(R, GetID(Token(S, I))));
       D^.Insert(PV);
@@ -754,14 +781,14 @@ var
 
     procedure MakeCheckBoxes;
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+       AssignRect(R, S, I);
        PV := New(PCheckBoxes, Init(R, GetItems));
        D^.Insert(PV);
     end;
 
     procedure MakeDriveCheckBoxes;
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+       AssignRect(R, S, I);
        PV := New(PCurrDriveInfo, Init(R, GetItems));
        D^.Insert(PV);
        with PV^ do
@@ -773,7 +800,7 @@ var
 
     procedure MakeRadioButtons;
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+       AssignRect(R, S, I);
        PV := New(PRadioButtons, Init(R, GetItems));
        D^.Insert(PV);
     end;
@@ -783,7 +810,7 @@ var
           Flags, Options: Word;
           CmD: Word;
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+       AssignRect(R, S, I);
        K := Token(S, I); Cmd := GetID(Token(S, I)); Flags := 0; Options := 0;
        while I < Length(S) do
           begin
@@ -801,7 +828,7 @@ var
 
     procedure MakeScrollBar(Mouse: Boolean);
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+       AssignRect(R, S, I);
        if Mouse then LastSB := New(PMouseBar, Init(R))
                 else LastSB := New(PScrollBar, Init(R));
        D^.Insert(LastSB);
@@ -809,29 +836,32 @@ var
 
     procedure MakeListBox;
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+       AssignRect(R, S, I);
        PV := New(PListBox, Init(R, GetID(Token(S, I)), LastSB));
        D^.Insert(PV);
     end;
 
     procedure MakeStaticText;
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+       AssignRect(R, S, I);
        PV := New(PStaticText, Init(R, Token(S, I)));
        D^.Insert(PV);
     end;
 
     procedure MakeUpperTable;
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
+       AssignRect(R, S, I);
        PV := New(PUpperTable, Init(R));
        D^.Insert(PV);
     end;
 
     procedure MakeParamText;
+      var PTxt: String; PCnt: Word;
     begin
-       R.Assign(GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)), GetID(Token(S, I)));
-       PV := New(PParamText, Init(R, Token(S, I), GetID(Token(S, I))));
+       AssignRect(R, S, I);
+       PTxt := Token(S, I);
+       PCnt := GetID(Token(S, I));
+       PV := New(PParamText, Init(R, PTxt, PCnt));
        D^.Insert(PV);
     end;
 
@@ -855,11 +885,13 @@ var
     T.Init(0, FreeStr);
     if not DLGs^.Search(@T, J) then Error('Unknown Resource ID: ' + T.Name);
     ID := TDlgIdx(PLngWord(DLGs^.At(J))^.L);
-    R.Assign(0, 0, GetID(Token(S, I)), GetID(Token(S, I)));
-    if ID = dlgSystemSetup then begin
-                                  D := New(PSysDialog, Init(R, Token(S, I)));
-                                  D^.Awaken;
-                                end else New(D, Init(R, Token(S, I)));
+    R.A.X := 0;
+    R.A.Y := 0;
+    R.B.X := GetID(Token(S, I));
+    R.B.Y := GetID(Token(S, I));
+    if ID = dlgSystemSetup then
+      D := New(PSysDialog, Init(R, Token(S, I)))
+    else New(D, Init(R, Token(S, I)));
     D^.Options := D^.Options or ofCentered;
      while not EOF(F) do
       begin
@@ -898,11 +930,7 @@ var
       end;
     D^.SelectNext(False);
     StoreResource(D, ID);
-    if ID = dlgSystemSetup then
-      begin
-        New( PCollection( DData.Drives.List ), Init( 0, 10 ));
-        D^.SetData( DData );
-      end;
+
     Dispose(D, Done);
   end;
 

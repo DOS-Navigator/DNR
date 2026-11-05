@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit Validate;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 {-----------------------------------------------------}
 { This module is based on Turbo Vision Validate Unit  }
@@ -183,7 +184,7 @@ type
 const
   RPXPictureValidator: TStreamRec = (
     ObjType: 80;
-    VmtLink: Ofs(TypeOf(TPXPictureValidator)^);
+    VmtLink: TypeOf(TPXPictureValidator);
     Load: @TPXPictureValidator.Load;
     Store: @TPXPictureValidator.Store
   );
@@ -192,7 +193,7 @@ const
 const
   RFilterValidator: TStreamRec = (
     ObjType: otFilterValidator;
-    VmtLink: Ofs(TypeOf(TFilterValidator)^);
+    VmtLink: TypeOf(TFilterValidator);
     Load: @TFilterValidator.Load;
     Store: @TFilterValidator.Store
   );
@@ -200,7 +201,7 @@ const
 const
   RRangeValidator: TStreamRec = (
     ObjType: otRangeValidator;
-    VmtLink: Ofs(TypeOf(TRangeValidator)^);
+    VmtLink: TypeOf(TRangeValidator);
     Load: @TRangeValidator.Load;
     Store: @TRangeValidator.Store
   );
@@ -210,7 +211,7 @@ const
 const
   RStringLookupValidator: TStreamRec = (
     ObjType: 83;
-    VmtLink: Ofs(TypeOf(TStringLookupValidator)^);
+    VmtLink: TypeOf(TStringLookupValidator);
     Load: @TStringLookupValidator.Load;
     Store: @TStringLookupValidator.Store
   );
@@ -218,10 +219,10 @@ const
 
 implementation
 
-{$IFDEF Windows}
-uses WinTypes, WinProcs, Strings;
+{$IFDEF WIN16_GUI}
+uses WinTypes, WinProcs, DnStrings;
 {$ELSE}
-uses RStrings, Commands, DNApp, Messages;
+uses RStrings, Commands, DNApp, DnMessages;
 {$ENDIF}
 
 { TValidator }
@@ -306,7 +307,7 @@ begin
   inherited Done;
 end;
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 
 procedure TPXPictureValidator.Error;
 var
@@ -823,7 +824,7 @@ begin
   S.Write(ValidChars, SizeOf(TCharSet));
 end;
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 
 procedure TFilterValidator.Error;
 begin
@@ -855,7 +856,7 @@ begin
   S.Read(Min, SizeOf(Max) + SizeOf(Min));
 end;
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 
 procedure TRangeValidator.Error;
 var
@@ -962,7 +963,7 @@ begin
   inherited Done;
 end;
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
 
 procedure TStringLookupValidator.Error;
 begin

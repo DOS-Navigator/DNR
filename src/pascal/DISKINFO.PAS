@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit DiskInfo;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 interface
 uses Objects, Drivers, Views, Dialogs, Dos, HideView, RStrings, Advance, ObjType;
 
@@ -89,7 +90,7 @@ type
 const
       RDiskInfo: TStreamRec = (
        ObjType: otDiskInfo;
-       VmtLink: Ofs(TypeOf(TDiskInfo)^);
+       VmtLink: TypeOf(TDiskInfo);
        Load: @TDiskInfo.Load;
        Store: @TDiskInfo.Store);
 
@@ -124,7 +125,55 @@ var
    BytPerSec: Word;
 
 implementation
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+uses Startup, ExtraMemory, DNApp, Commands, DNHelp, Tree, xTime, Memory;
+{$ELSE}
 uses Startup, ExtraMemory, DNApp, Commands, DNHelp, Tree, xTime;
+{$ENDIF}
+
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+{ FPC 3.2.2 win32 Windows unit (-Mtp) does not expose
+  GlobalMemoryStatusEx/TMemoryStatusEx (verified: "Identifier not
+  found") - declared directly against the stable WINAPI
+  MEMORYSTATUSEX layout instead of the older GlobalMemoryStatus,
+  which IS exposed but is documented (and verified live on this
+  machine) to cap its DWord fields at 0x7FFFFFFF once physical RAM
+  exceeds 4GB, making it uninformative on any modern PC. NOT adding
+  `Windows` to the uses clause deliberately - it exports its own
+  GetPath, colliding with this unit is own GetPath and breaking
+  three unrelated call sites, found the hard way. LongBool (a
+  plain System type) needs no such import. }
+type
+  TMemoryStatusEx = record
+    dwLength: DWord;
+    dwMemoryLoad: DWord;
+    ullTotalPhys: QWord;
+    ullAvailPhys: QWord;
+    ullTotalPageFile: QWord;
+    ullAvailPageFile: QWord;
+    ullTotalVirtual: QWord;
+    ullAvailVirtual: QWord;
+    ullAvailExtendedVirtual: QWord;
+  end;
+
+function GlobalMemoryStatusEx(var Buffer: TMemoryStatusEx): LongBool; stdcall;
+  external 'kernel32' name 'GlobalMemoryStatusEx';
+
+function GetDiskFreeSpaceA(
+  lpRootPathName: PChar;
+  var lpSectorsPerCluster: DWord;
+  var lpBytesPerSector: DWord;
+  var lpNumberOfFreeClusters: DWord;
+  var lpTotalNumberOfClusters: DWord
+): LongBool; stdcall; external 'kernel32' name 'GetDiskFreeSpaceA';
+  { stdcall is mandatory here - verified live: without it the call
+    compiles but fails at runtime with GetLastError=87
+    (ERROR_INVALID_PARAMETER), a calling-convention mismatch under
+    -Mtp's default convention. }
+
+var
+  FpcMemStatus: TMemoryStatusEx;
+{$ENDIF}
 
 const MaxTeam = 93;
 
@@ -243,6 +292,29 @@ procedure TDiskInfo.ReadData;
  var
      MemBlocks, I: Word;
 begin
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+ Abort:=Off;
+ begin
+   FillChar(FpcMemStatus, SizeOf(FpcMemStatus), 0);
+   FpcMemStatus.dwLength := SizeOf(FpcMemStatus);
+   if GlobalMemoryStatusEx(FpcMemStatus) then
+   begin
+     if FpcMemStatus.ullTotalPhys > QWord(High(LongInt)) then
+       TotalMemory := High(LongInt)
+     else
+       TotalMemory := LongInt(FpcMemStatus.ullTotalPhys);
+     if FpcMemStatus.ullAvailPhys > QWord(High(LongInt)) then
+       FreeMemory := High(LongInt)
+     else
+       FreeMemory := LongInt(FpcMemStatus.ullAvailPhys);
+   end
+   else
+   begin
+     TotalMemory := High(LongInt);
+     FreeMemory := High(LongInt);
+   end;
+ end;
+{$ELSE}
  Abort:=Off;
  asm
   int $12
@@ -250,6 +322,7 @@ begin
  end;
  TotalMemory := Longint(LongInt(MemBlocks) shl 10);
  FreeMemory := TotalMemory-Longint(PrefixSeg) shl 4;
+{$ENDIF}
  DisposeStr(Info.Title);
  DisposeStr(Info.Dir);
  DisposeStr(Info.Files);
@@ -474,7 +547,9 @@ begin
   if Abort then CountDirLen := 0;
 end;
 
-procedure GetSpace(Drive : Char);assembler;
+procedure GetSpace(Drive : Char);
+{$IFDEF CPUI8086}
+assembler;
 asm
   mov ax,0
   mov BytPerSec,ax
@@ -493,6 +568,28 @@ asm
   mov SecPerClu,ax
 @ex:
 end;
+{$ELSE}
+var
+  RootPath: array[0..4] of Char;
+  _spc, _bps, _fc, _tc: DWord;
+begin
+  BytPerSec := 0;
+  SecPerClu := 0;
+  TotClu := 0;
+  FreeClu := 0;
+  RootPath[0] := Drive;
+  RootPath[1] := ':';
+  RootPath[2] := '\';
+  RootPath[3] := #0;
+  if GetDiskFreeSpaceA(@RootPath[0], _spc, _bps, _fc, _tc) then
+  begin
+    SecPerClu := Word(_spc);
+    BytPerSec := Word(_bps);
+    if _fc > $FFFF then FreeClu := $FFFF else FreeClu := Word(_fc);
+    if _tc > $FFFF then TotClu := $FFFF else TotClu := Word(_tc);
+  end;
+end;
+{$ENDIF}
 
 procedure GetDrInfo(Drv: Byte);
  var Dr : Char;

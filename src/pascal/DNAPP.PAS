@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit DNApp;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 
@@ -295,19 +296,19 @@ const
 
   RBackground: TStreamRec = (
     ObjType: otBackground;
-    VmtLink: Ofs(TypeOf(TBackground)^);
+    VmtLink: TypeOf(TBackground);
     Load: @TBackground.Load;
     Store: @TBackground.Store);
 
   RDesktop: TStreamRec = (
     ObjType: otDesktop;
-    VmtLink: Ofs(TypeOf(TDesktop)^);
+    VmtLink: TypeOf(TDesktop);
     Load: @TDesktop.Load;
     Store: @TDesktop.Store);
 
   RStringCache: TStreamRec = (
     ObjType: otStringCache;
-    VmtLink: Ofs(TypeOf(TCacheCollection)^);
+    VmtLink: TypeOf(TCacheCollection);
     Load: @TCacheCollection.Load;
     Store: @TCacheCollection.Store);
 
@@ -786,6 +787,7 @@ begin
      (CommandLine^.GetState(sfVisible)) then
   begin
     IdleWas := False;
+{$IFDEF CPUI8086}
     asm
      mov ah,3
      xor bx,bx
@@ -793,6 +795,9 @@ begin
      mov A1, dx
      mov A2, cx
     end;
+{$ELSE}
+    A1 := 0; A2 := 0;
+{$ENDIF}
     if ((Hi(A2) = $20) or (Hi(A1) = Size.Y - 1 - Byte( InterfaceData.Options and ouiHideStatus = 0 )))
        then CommandLine^.Update;
   end;
@@ -834,8 +839,26 @@ procedure TProgram.Idle;
  var P: PView;
      E: TEvent;
      A1, A2: Word;
+     R: TRect;
  label 1;
 begin
+{$IFNDEF CPUI8086}
+  CheckScreenResize;
+  if ConsumeScreenResize then
+  begin
+    Buffer := ScreenBuffer;
+    R.Assign(0, 0, ScreenWidth, ScreenHeight);
+    ChangeBounds(R);
+    R.Assign(0, ScreenHeight - 1 - Byte(InterfaceData.Options and ouiHideStatus = 0),
+             ScreenWidth, ScreenHeight - Byte(InterfaceData.Options and ouiHideStatus = 0));
+    if CommandLine <> nil then CommandLine^.Locate(R);
+    Redraw;
+    FlushScreenBuffer;
+  end;
+{$ENDIF}
+{ CPUI8086}
+  SliceYield;
+{}
   if StatusLine <> nil then StatusLine^.Update;
   if CommandSetChanged then
   begin
@@ -953,7 +976,12 @@ begin
    HideMouse;
    DoneEvents;
    SetVideoMode(Mode);
+{$IFDEF FPC}{$IFNDEF CPUI8086}
+   { CharHeight already defaults to 16 (DRIVERS.PAS) - the standard
+     VGA 80x25 value; no BIOS byte to refresh it from on Win32. }
+{$ELSE}
    CharHeight := Mem[$40:$85];
+{$ENDIF}{$ENDIF}
    InitEvents;
    DoneMemory;
    InitMemory;
@@ -965,6 +993,7 @@ begin
             ScreenWidth, ScreenHeight     - Byte(InterfaceData.Options and ouiHideStatus = 0));
    if CommandLine <> nil then CommandLine^.Locate(R);
    ShowMouse;
+{$IFDEF CPUI8086}
    asm
      mov ah, 1
      xor bx, bx
@@ -973,6 +1002,7 @@ begin
      int 10h
      pop bp
    end;
+{$ENDIF}
    CursorLines := $607;
    SetBlink(CurrentBlink);
 end;
@@ -1032,6 +1062,7 @@ begin
  GetExtent(R);
  PV := New(PBackground, Init(R, ' '));
  if CommandLine <> nil then CommandLine^.SetState(sfDisabled, On);
+{$IFDEF CPUI8086}
  asm
     mov cx, $2020
     xor bx, bx
@@ -1040,6 +1071,7 @@ begin
     int 10h
     pop  bp
  end;
+{$ENDIF}
  Insert(PV);
  WhenShow;
  if CommandLine <> nil then CommandLine^.SetState(sfDisabled, Off);

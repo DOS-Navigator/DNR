@@ -47,11 +47,12 @@
 {$define dn}
 {$ifdef dn}
 unit Tetris;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 {$endif}
 
-USES Objects, Drivers, Views, DNApp, Dialogs, Memory, Menus, Messages,
+USES Objects, Drivers, Views, DNApp, Dialogs, Memory, Menus, DnMessages,
      Commands, Advance, RStrings, ObjType;
 
 const
@@ -128,19 +129,19 @@ const Game : PGameView = nil;
 
       RGameWindow: TStreamRec = (
        ObjType: otGameWindow;
-       VmtLink: Ofs(TypeOf(TGameWindow)^);
+       VmtLink: TypeOf(TGameWindow);
        Load: @TGameWindow.Load;
        Store: @TGameWindow.Store);
 
       RGameView: TStreamRec = (
        ObjType: otGameView;
-       VmtLink: Ofs(TypeOf(TGameView)^);
+       VmtLink: TypeOf(TGameView);
        Load: @TGameView.Load;
        Store: @TGameView.Store);
 
       RGameInfo: TStreamRec = (
        ObjType: otGameInfo;
-       VmtLink: Ofs(TypeOf(TGameInfo)^);
+       VmtLink: TypeOf(TGameInfo);
        Load: @TGameInfo.Load;
        Store: @TGameInfo.Store);
 
@@ -321,7 +322,7 @@ begin
  MoveChar(B[Size.X-1], '³', C, 1);
  WriteLine(0,12,Size.X,1,B);
  MoveChar(B, ' ', C, Size.X);
- MoveCStr(B,+GetString(dlGameScore) + ItoS(Gm^.HiScores[1+10*byte(Gm^.Pentix)].Score), C);
+ MoveCStr(B, GetString(dlGameScore) + ItoS(Gm^.HiScores[1+10*byte(Gm^.Pentix)].Score), C);
  MoveChar(B[Size.X-1], '³', C, 1);
  WriteLine(0,13,Size.X,1,B);
  MoveChar(B, 'Ä', C, Size.X);

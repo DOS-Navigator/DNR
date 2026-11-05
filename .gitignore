@@ -364,3 +364,7 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,macos,linux,freepascal,assembler,cmake,jupyternotebooks,python,c,c++
+helpers/
+tools/*.py
+!tools/test_full_tui_interactive.py
+tools/test_charinfo.pas

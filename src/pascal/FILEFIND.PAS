@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit FileFind;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Objects, Views, Dialogs, Drivers, Menus, FileCopy, FilesCol, Eraser,
@@ -168,19 +169,19 @@ type
 const
       RFindDrive: TStreamRec = (
        ObjType: otFindDrive;
-       VmtLink: Ofs(TypeOf(TFindDrive)^);
+       VmtLink: TypeOf(TFindDrive);
        Load: @TFindDrive.Load;
        Store: @TFindDrive.Store);
 
       RTempDrive: TStreamRec = (
        ObjType: otTempDrive;
-       VmtLink: Ofs(TypeOf(TTempDrive)^);
+       VmtLink: TypeOf(TTempDrive);
        Load: @TTempDrive.Load;
        Store: @TTempDrive.Store);
 
 
 implementation
-uses DNApp, Advance, Startup, Memory, Messages, HistList, Commands,
+uses DNApp, Advance, Startup, Memory, DnMessages, HistList, Commands,
      RStrings, FlPanel, FViewer, MicroEd, Tree, xTime, DnUtil;
 
 const
@@ -617,11 +618,19 @@ begin
   AddDirectory(FExpand(Dir));
   I := Dirs^.Count-1;
   MemReq := LowMemSize;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  while (I >= 0) and (not Abort) and (Memory.MemAvail > MemReq) do
+  {$ELSE}
   while (I >= 0) and (not Abort) and (System.MemAvail > MemReq) do
+  {$ENDIF}
     begin
       I := Dirs^.Count-1;
       {if Files^.Count >= 2000 then Break;}
+      {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+      while (I >= 0) and (not Abort) and (Memory.MemAvail > MemReq) do
+      {$ELSE}
       while (I >= 0) and (not Abort) and (System.MemAvail > MemReq) do
+      {$ENDIF}
         begin
           UpdateWriteView(PI);
           P := Dirs^.At(I);
@@ -643,7 +652,11 @@ begin
     end;
   PI^.Free;
   PDrv := New(PFindDrive, Init(GetString( dlBranch )+Dir, Dirs, Files));
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  PDrv^.NoMemory := Memory.MemAvail <= MemReq;
+  {$ELSE}
   PDrv^.NoMemory := System.MemAvail <= MemReq;
+  {$ENDIF}
   OpenDirectory := PDrv;
 end;
 

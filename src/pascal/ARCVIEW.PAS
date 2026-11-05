@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 Unit ArcView;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 Interface uses Dos,Objects,Views,Drivers,FViewer,FlPanel,FilesCol,DiskInfo,
                DblWnd,HistList,HideView,RStrings,Drives,Commands,Archiver,
@@ -122,32 +123,40 @@ type
 const
       RFileInfo: TStreamRec = (
        ObjType: otFileInfo;
-       VmtLink: Ofs(TypeOf(TFileInfo)^);
+       VmtLink: TypeOf(TFileInfo);
        Load: @TFileInfo.Load;
        Store: @TFileInfo.Store);
 
       RArcDrive: TStreamRec = (
        ObjType: otArcDrive;
-       VmtLink: Ofs(TypeOf(TArcDrive)^);
+       VmtLink: TypeOf(TArcDrive);
        Load: @TArcDrive.Load;
        Store: @TArcDrive.Store);
 
       RUserSaver: TStreamRec = (
        ObjType: otUserSaver;
-       VmtLink: Ofs(TypeOf(TUserSaver)^);
+       VmtLink: TypeOf(TUserSaver);
        Load: @TUserSaver.Load;
        Store: @TUserSaver.Store);
 
-Implementation uses Menus,DnApp,Messages,Dialogs,Gauge,FileCopy,
+Implementation uses Menus,DnApp,DnMessages,Dialogs,Gauge,FileCopy,
                     Memory,Startup, Arvid, xTime;
 
 const
   LowMemSize = $4000;  {Local setting}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+function MaxAvail: LongInt;
+begin
+  { Memory.MaxAvail, not System's (win32 has neither) }
+  MaxAvail := MemAdjust(Memory.MaxAvail);
+end;
+{$ELSE}
 function MaxAvail: LongInt;
 begin
   MaxAvail := MemAdjust(System.MaxAvail);
 end;
+{$ENDIF}
 
 Procedure StdMsg(MsgNo: Byte);
 var

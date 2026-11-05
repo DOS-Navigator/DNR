@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit ScrollBk;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses Objects, Drivers, Views, Scroller, ObjType;
@@ -93,13 +94,13 @@ procedure DeallocateScrollbk ;
 const
       RScrollBackWindow: TStreamRec = (
        ObjType: otScrollBackWindow;
-       VmtLink: Ofs(TypeOf(TScrollBackWindow)^);
+       VmtLink: TypeOf(TScrollBackWindow);
        Load: @TScrollBackWindow.Load;
        Store: @TScrollBackWindow.Store);
 
       RScrollBack: TStreamRec = (
        ObjType: otScrollBack;
-       VmtLink: Ofs(TypeOf(TScrollBack)^);
+       VmtLink: TypeOf(TScrollBack);
        Load: @TScrollBack.Load;
        Store: @TScrollBack.Store);
 
@@ -108,7 +109,7 @@ const
 
 implementation
 uses Advance,Memory,Terminal,Commands,RStrings, DNHelp,
-     HistList,Messages,DNStdDlg,DNApp,MicroEd,Menus,ExtraMemory;
+     HistList,DnMessages,DNStdDlg,DNApp,MicroEd,Menus,ExtraMemory;
 
 
 const  BackStream: PStream = nil;

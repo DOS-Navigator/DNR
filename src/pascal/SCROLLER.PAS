@@ -46,6 +46,7 @@
 
 UNIT
   Scroller;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 INTERFACE
 
@@ -120,14 +121,14 @@ TYPE
 CONST
   RScroller: TStreamRec = (
      ObjType: otScroller;
-     VmtLink: Ofs(TypeOf(TScroller)^);
+     VmtLink: TypeOf(TScroller);
      Load:    @TScroller.Load;
      Store:   @TScroller.Store
   );
 
   RListViewer: TStreamRec = (
      ObjType: otListViewer;
-     VmtLink: Ofs(TypeOf(TListViewer)^);
+     VmtLink: TypeOf(TListViewer);
      Load:    @TListViewer.Load;
      Store:   @TLIstViewer.Store
   );

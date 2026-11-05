@@ -45,6 +45,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 unit XDblWnd;
+{$V-} { relaxed var-string checks: DN 1.51's original build setting, lost with its TURBO.CFG; see TOOLCHAIN.md }
 
 interface
 uses DblWnd, Drivers, Views, Objects, ObjType;
@@ -61,7 +62,7 @@ type
 const
      RDoubleWindow: TStreamRec = (
        ObjType: otDoubleWindow;
-       VmtLink: Ofs(TypeOf(TXDoubleWindow)^);
+       VmtLink: TypeOf(TXDoubleWindow);
        Load: @TXDoubleWindow.Load;
        Store: @TXDoubleWindow.Store);
 
@@ -156,10 +157,10 @@ begin
                cmPostHideRight,
                cmPostHideLeft,
                cmChangeInactive,
-               cmGetDirName,
+               { cmGetDirName removed: already handled by the cmPushName arm above; TP matched first, so this occurrence was dead }
                cmPanelCompare,
                cmDiskInfo,
-               cmChangeDirectory,
+               { cmChangeDirectory removed: it has its own arm above; TP matched first, so this occurrence was dead }
                cmLoadViewFile,
                cmGLoadViewFile,
                cmEnableView,
