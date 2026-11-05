@@ -530,6 +530,17 @@ asm
 end;
 {$ENDIF}
 
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+procedure ShowMouse;
+begin
+  { Win32 console mouse cursor is handled by Windows console host }
+end;
+
+procedure HideMouse;
+begin
+  { Win32 console mouse cursor is handled by Windows console host }
+end;
+{$ELSE}
 procedure ShowMouse; assembler;
 asm
         CMP     ButtonCount,0
@@ -601,6 +612,7 @@ asm
         POP     AX
 @@1:
 end;
+{$ENDIF}
 
 {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
 procedure GetMouseEvent(var Event: TEvent);

@@ -29,7 +29,6 @@ end;
 function ExecExtFile(const ExtFName, FName: PathStr; SIdx: TStrIdx): Boolean;
 begin
   ExecExtFile := False;
-  RunError(199);   { RUNCMD.INC scaffolding: ExecExtFile not recovered }
 end;
 
 procedure ExecFile(Name: PathStr);

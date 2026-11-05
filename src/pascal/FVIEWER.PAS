@@ -1099,6 +1099,8 @@ procedure TFileViewer.MakeLines;
      I, J, K, Hx: longInt;
      B: Byte;
      MaxX: longInt;
+     Col, Consumed, Limit: LongInt;
+     Ch: Byte;
 begin
  if Buf = nil then Exit;
  if Wrap then MaxX := Size.X else MaxX := 255;
@@ -1120,7 +1122,41 @@ begin
          begin
            Lines[K].Pos := J;
            if I > MaxX then I := MaxX;
-           asm
+           {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+            B := 0;
+            Col := 0;
+            Consumed := 0;
+            Limit := I;
+            while Consumed < Limit do
+            begin
+              Ch := Buf^[J + Consumed];
+              Inc(Consumed);
+              if Ch = 9 then
+              begin
+                Col := (Col + 8) and (not 7);
+                Inc(B);
+                if Col > Limit then Break;
+              end
+              else if Ch = 13 then
+              begin
+                if (J + Consumed < BufSize) and (Buf^[J + Consumed] = 10) then
+                  Inc(Consumed);
+                Break;
+              end
+              else if Ch = 10 then
+              begin
+                Break;
+              end
+              else
+              begin
+                Inc(B);
+                Inc(Col);
+                if Col > Limit then Break;
+              end;
+            end;
+            Inc(J, Consumed);
+            {$ELSE}
+            asm
             les di, P1
             add di, word ptr J
             mov cx, word ptr I
@@ -1165,6 +1201,7 @@ begin
             add ax, word ptr I
             mov word ptr J, ax
            end;
+            {$ENDIF}
            Lines[K].Len := B;
          end;
        end;
@@ -1719,10 +1756,52 @@ procedure TFileViewer.CountUp;
   var I: Word;
       P: Pointer;
       MaxX: Integer;
+      Step: Integer;
+      ah_val: Byte;
  begin
   if J <= 0 then Exit;
   I := J; P := Buf;
   if Wrap then MaxX := Size.X - 1 else MaxX := 254;
+  {$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  Dec(I);
+  if Integer(I) >= 0 then
+  begin
+    ah_val := Buf^[I];
+    Dec(I);
+    if (Integer(I) >= 0) and ((ah_val = 10) or (ah_val = 13)) then
+    begin
+      if Buf^[I] = ah_val then
+      begin
+        Inc(I);
+      end
+      else
+      begin
+        Step := MaxX;
+        while (Step > 0) and (Integer(I) >= 0) do
+        begin
+          if (Buf^[I] = 13) or (Buf^[I] = 10) then Break;
+          Dec(I);
+          Dec(Step);
+        end;
+        Inc(I);
+      end;
+    end
+    else
+    begin
+      Step := MaxX;
+      while (Step > 0) and (Integer(I) >= 0) do
+      begin
+        if (Buf^[I] = 13) or (Buf^[I] = 10) then Break;
+        Dec(I);
+        Dec(Step);
+      end;
+      Inc(I);
+    end;
+  end
+  else
+    I := 0;
+  J := I;
+  {$ELSE}
   asm
    les di, P
    add di, word ptr I
@@ -1759,6 +1838,7 @@ procedure TFileViewer.CountUp;
 
   end;
   J := I + 1;
+  {$ENDIF}
  end;
 
  label 1;
