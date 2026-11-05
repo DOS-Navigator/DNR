@@ -682,6 +682,40 @@ procedure WriteBlock(Hint: String; S: PStream; C: PCollector; ForcedCRLF: TForce
      P: PString;
 
   procedure CompressString;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+   var
+     SrcIdx, Len, BlockPos, SpaceCount: Integer;
+     Res: String;
+     C: Char;
+  begin
+   Len := Length(SST);
+   if Len = 0 then Exit;
+   Res := '';
+   SrcIdx := 1;
+   while SrcIdx <= Len do
+   begin
+     BlockPos := 0;
+     SpaceCount := 0;
+     while (BlockPos < 8) and (SrcIdx <= Len) do
+     begin
+       C := SST[SrcIdx];
+       Inc(SrcIdx);
+       Inc(BlockPos);
+       Res := Res + C;
+       if C = ' ' then
+         Inc(SpaceCount)
+       else
+         SpaceCount := 0;
+     end;
+     if (BlockPos = 8) and (SpaceCount > 1) then
+     begin
+       Delete(Res, Length(Res) - SpaceCount + 1, SpaceCount);
+       Res := Res + #9;
+     end;
+   end;
+   SST := Res;
+  end;
+{$ELSE}
    var I, J, K: Integer;
        PP: Pointer;
   begin
@@ -728,6 +762,7 @@ procedure WriteBlock(Hint: String; S: PStream; C: PCollector; ForcedCRLF: TForce
     @@Ex:
    end;
   end;
+{$ENDIF}
 
   var PP: PView;
       CrLf: String[2];
@@ -1655,6 +1690,10 @@ procedure TFileEditor.DoHighlite;
  label 1,10,11;
  var LPos,I: Integer;
      LP: Integer;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+     Col, NumState: Integer;
+     QuoteChar, C: Char;
+{$ENDIF}
 
   procedure SearchComments(const St, En: String);
     var I: Integer;
@@ -1679,6 +1718,9 @@ procedure TFileEditor.DoHighlite;
 begin
    S[0] := Char(Min(Size.X+Pos.X, Length(S)));
    LPos := 1;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+   while (LPos <= Length(S)) and (S[LPos] = ' ') do Inc(LPos);
+{$ELSE}
    asm
      lea di, S
      mov cl, ss:[di]
@@ -1692,6 +1734,7 @@ begin
      loop @1
    @2:
    end;
+{$ENDIF}
    for I := 1 to NumCommentStartChars do
        if S[LPos] = CommentStartChars[I] then Goto 1;
    LPos := 0;
@@ -1715,6 +1758,60 @@ begin
     end;
    LP := -Pos.X*2+1;
    if not CommentsOnly then
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+   begin
+     QuoteChar := #0;
+     NumState := 0;
+     for I := 1 to Length(S) do
+     begin
+       C := S[I];
+       Col := I - 1 - Pos.X;
+       if (C = '''') or (C = '"') then
+       begin
+         if QuoteChar = C then QuoteChar := #0
+         else if QuoteChar = #0 then QuoteChar := C;
+         S[I] := #0;
+         if (Col >= 0) and (Col < Size.X) then
+           PByteArray(@B)^[Col * 2 + 1] := Strings;
+         NumState := 0;
+       end
+       else if QuoteChar <> #0 then
+       begin
+         S[I] := #0;
+         if (Col >= 0) and (Col < Size.X) then
+           PByteArray(@B)^[Col * 2 + 1] := Strings;
+       end
+       else
+       begin
+         if C in BreakChars then
+         begin
+           NumState := 0;
+           if (Col >= 0) and (Col < Size.X) then
+             PByteArray(@B)^[Col * 2 + 1] := Symbols;
+         end
+         else if (NumState and 1) <> 0 then
+         begin
+           // Identifier continues
+         end
+         else if (C >= '0') and (C <= '9') then
+         begin
+           NumState := 2;
+           if (Col >= 0) and (Col < Size.X) then
+             PByteArray(@B)^[Col * 2 + 1] := Numbers;
+         end
+         else if (NumState = 2) and (C in ['A'..'F', 'a'..'f', 'H', 'h', 'O', 'o', 'X', 'x']) then
+         begin
+           if (Col >= 0) and (Col < Size.X) then
+             PByteArray(@B)^[Col * 2 + 1] := Numbers;
+         end
+         else
+         begin
+           NumState := 1;
+         end;
+       end;
+     end;
+   end;
+{$ELSE}
      asm
        lea  di, S
        les  si, B
@@ -1824,6 +1921,7 @@ begin
        jmp  @@4
      @@3:
      end;
+{$ENDIF}
    if C_Comments then
      begin
        SearchComments('/*','*/');
@@ -2501,6 +2599,40 @@ L1:
       A: Word;
 
   procedure CompressString;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+   var
+     SrcIdx, Len, BlockPos, SpaceCount: Integer;
+     Res: String;
+     C: Char;
+  begin
+   Len := Length(SST);
+   if Len = 0 then Exit;
+   Res := '';
+   SrcIdx := 1;
+   while SrcIdx <= Len do
+   begin
+     BlockPos := 0;
+     SpaceCount := 0;
+     while (BlockPos < 8) and (SrcIdx <= Len) do
+     begin
+       C := SST[SrcIdx];
+       Inc(SrcIdx);
+       Inc(BlockPos);
+       Res := Res + C;
+       if C = ' ' then
+         Inc(SpaceCount)
+       else
+         SpaceCount := 0;
+     end;
+     if (BlockPos = 8) and (SpaceCount > 1) then
+     begin
+       Delete(Res, Length(Res) - SpaceCount + 1, SpaceCount);
+       Res := Res + #9;
+     end;
+   end;
+   SST := Res;
+  end;
+{$ELSE}
    var I, J, K: Integer;
        PP: Pointer;
   begin
@@ -2547,6 +2679,7 @@ L1:
     @@Ex:
    end;
   end;
+{$ENDIF}
 
  begin
   if not (BlockVisible and ValidBlock) then Exit;
@@ -3339,6 +3472,37 @@ function TFileEditor.ReadBlock;
      WasCR: Boolean;
 
  procedure CountLines;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  var
+    PB: PByteArray;
+    Idx, Remaining: LongInt;
+ begin
+  if J <= 0 then Exit;
+  PB := PByteArray(B);
+  Idx := 0;
+  Remaining := J;
+  while Remaining > 0 do
+  begin
+    if PB^[Idx] = 13 then
+    begin
+      if Remaining = 1 then
+        Break;
+      if PB^[Idx + 1] = 10 then
+      begin
+        Dec(Remaining);
+        Inc(Idx);
+      end;
+      Inc(LCount);
+    end
+    else if PB^[Idx] = 10 then
+    begin
+      Inc(LCount);
+    end;
+    Inc(Idx);
+    Dec(Remaining);
+  end;
+ end;
+{$ELSE}
   var P: Pointer;
       K,L: Word;
  begin
@@ -3370,6 +3534,7 @@ function TFileEditor.ReadBlock;
   end;
   LCount := L;
  end;
+{$ENDIF}
 
  procedure SearchLines;
   label 1,L2;
@@ -3380,9 +3545,58 @@ function TFileEditor.ReadBlock;
       MMM: String;
       C: Char;
       WC: Boolean;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+      PB: PByteArray;
+      ByteVal: Byte;
+{$ENDIF}
  begin
   WC := WasCR;
   K := 1; P := B; L := J;
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+  PB := PByteArray(B);
+  repeat
+    MMM := ST;
+    while K <= J do
+    begin
+      ByteVal := PB^[K - 1];
+      if ByteVal = 10 then
+      begin
+        Goto L2;
+      end
+      else if ByteVal = 13 then
+      begin
+        if (K < J) and (PB^[K] = 10) then
+          Inc(K);
+        Goto L2;
+      end
+      else if ByteVal = 9 then
+      begin
+        repeat
+          MMM := MMM + ' ';
+          if (Length(MMM) and 7) = 0 then Break;
+          if Length(MMM) >= 254 then Break;
+        until False;
+        if Length(MMM) >= 254 then
+          Goto L2;
+      end
+      else
+      begin
+        MMM := MMM + Chr(ByteVal);
+        if Length(MMM) >= 254 then
+          Goto L2;
+      end;
+      Inc(K);
+    end;
+    ST := MMM;
+    Exit;
+L2:
+    ST := MMM;
+    while (Length(ST) > 0) and (ST[Length(ST)] = ' ') do Dec(ST[0]);
+    Lines^.AddStr(ST);
+    ST := '';
+    Inc(K);
+  until K > J;
+{$ELSE}
   repeat
    MMM := ST;
    asm
@@ -3443,6 +3657,7 @@ L2: ST := MMM;
    ST := '';
    Inc(K);
   until K > J;
+{$ENDIF}
  end;
 
  var Info: PView;
@@ -3454,14 +3669,19 @@ begin
  S := New(PBufStream, Init(FileName, stOpenRead,1024));
  if (S^.Status <> stOK) then
     begin
+{$IF DEFINED(FPC) AND NOT DEFINED(CPUI8086)}
+      K := S^.ErrorInfo;
+      if K = 0 then K := InOutRes;
+{$ELSE}
       asm
          mov ax, $5900
          xor bx, bx
          int 21h
          mov K, ax
       end;
-      isValid := (K = 2) or (K = 3);
-      if (K <> 2) and (K <> 3) then MessageBox(GetString(dlFBBNoOpen)+FileName, nil, mfError + mfOKButton);
+{$ENDIF}
+      isValid := (K = 2) or (K = 3) or (K = 0);
+      if (K <> 2) and (K <> 3) and (K <> 0) then MessageBox(GetString(dlFBBNoOpen)+FileName, nil, mfError + mfOKButton);
       Dispose(S, Done);
       Exit
     end;
