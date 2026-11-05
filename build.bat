@@ -34,33 +34,49 @@ echo.
 echo === Step 2: Compiling English and Russian Resource Files ===
 echo.
 if not exist "%BUILD_DIR%\DN.DLG" (
-    "%BUILD_DIR%\RCP.exe" "%ROOT%RESOURCE\ENGLISH\DN.RC" "%BUILD_DIR%\DN.DLG" "%BUILD_DIR%\DN.LNG"
+    "%BUILD_DIR%\RCP.exe" "%ROOT%rcp.ini"
     if errorlevel 1 (
-        echo ERROR: RCP English compilation failed.
-        exit /b 1
-    )
-)
-if not exist "%BUILD_DIR%\DNRUS.DLG" (
-    "%BUILD_DIR%\RCP.exe" "%ROOT%RESOURCE\RUSSIAN\DNRUS.RC" "%BUILD_DIR%\DNRUS.DLG" "%BUILD_DIR%\DNRUS.LNG"
-    if errorlevel 1 (
-        echo ERROR: RCP Russian compilation failed.
+        echo ERROR: RCP compilation failed.
         exit /b 1
     )
 )
 
 echo.
-echo === Step 3: Generating Embedded Pascal Resource Include ===
+echo === Step 3: Compiling Help Compiler (TVHC.PAS) and Building Help Files ===
 echo.
-if not exist "%ROOT%src\pascal\embedded_resources.inc" (
-    python "%ROOT%generate_embedded_resources.py"
+if not exist "%BUILD_DIR%\TVHC.exe" (
+    fpc -Twin32 -Pi386 -WC -Mtp -O2 -Xs -dWINDOWS -Fisrc/pascal -Fusrc/pascal -FEbuild -FUbuild/units "%ROOT%src\pascal\TVHC.PAS"
     if errorlevel 1 (
-        echo ERROR: Failed to generate embedded_resources.inc.
+        echo ERROR: TVHC compilation failed.
+        exit /b 1
+    )
+)
+if not exist "%BUILD_DIR%\DN.HLP" (
+    cmd.exe /c ""%BUILD_DIR%\TVHC.exe" "%ROOT%RESOURCE\ENGLISH\DNHELP.HTX" "%BUILD_DIR%\DN.HLP""
+    if errorlevel 1 (
+        echo ERROR: DN.HLP compilation failed.
+        exit /b 1
+    )
+)
+if not exist "%BUILD_DIR%\DNRUS.HLP" (
+    cmd.exe /c ""%BUILD_DIR%\TVHC.exe" "%ROOT%RESOURCE\RUSSIAN\DNHELP.HTX" "%BUILD_DIR%\DNRUS.HLP""
+    if errorlevel 1 (
+        echo ERROR: DNRUS.HLP compilation failed.
         exit /b 1
     )
 )
 
 echo.
-echo === Step 4: Building DOS Navigator (DN.PAS) Monolithic Binary ===
+echo === Step 4: Generating Embedded Pascal Resource Include ===
+echo.
+python "%ROOT%generate_embedded_resources.py"
+if errorlevel 1 (
+    echo ERROR: Failed to generate embedded_resources.inc.
+    exit /b 1
+)
+
+echo.
+echo === Step 5: Building DOS Navigator (DN.PAS) Monolithic Binary ===
 echo.
 fpc -Twin32 -Pi386 -WC -Mtp -O2 -Xs -dWINDOWS -dDN -Fisrc/pascal -Fisrc/asm -Fusrc/pascal -Fubuild -Fubuild/units -Fubuild/asm -FEbuild -FUbuild/units "%ROOT%src\pascal\DN.PAS" -o"%BUILD_DIR%\dn.exe"
 if errorlevel 1 (
@@ -70,6 +86,9 @@ if errorlevel 1 (
 )
 
 copy /y "%BUILD_DIR%\dn.exe" "%DIST_DIR%\dn.exe" >nul
+copy /y "%BUILD_DIR%\DN.HLP" "%DIST_DIR%\DN.HLP" >nul
+copy /y "%BUILD_DIR%\DNRUS.HLP" "%DIST_DIR%\DNRUS.HLP" >nul
+copy /y "%ROOT%RESOURCE\DN.MNU" "%DIST_DIR%\DN.MNU" >nul
 
 echo.
 echo === Build succeeded ===

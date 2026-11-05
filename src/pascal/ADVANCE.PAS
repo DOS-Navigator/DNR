@@ -75,6 +75,7 @@ type
      BufPos: Integer;
      Buf: TTextReaderBuf;
      Skip1: Boolean;
+     Opened: Boolean;
    end;
 
   { TColorIndexes }
@@ -2113,10 +2114,24 @@ var
   FileSz: LongInt;
   ToRead: Integer;
 begin
-  ClrIO; FileMode := $40; Assign(Handle, FName); Reset(Handle, 1);
+  Opened := False;
+  ClrIO; FileMode := $40; Assign(Handle, FName);
+  {$I-}
+  Reset(Handle, 1);
+  {$I+}
   if (IOResult <> 0) or Abort then Fail;
+  Opened := True;
   FileSz := FileSize(Handle);
-  if (IOResult <> 0) or Abort then Fail;
+  if (IOResult <> 0) or Abort then
+  begin
+    ClrIO;
+    {$I-}
+    Close(Handle);
+    {$I+}
+    Opened := False;
+    ClrIO;
+    Fail;
+  end;
   Eof := FileSz = 0;
   if not Eof then
   begin
@@ -2124,7 +2139,12 @@ begin
     BlockRead(Handle, Buf, ToRead, BufSz);
     if (IOResult <> 0) or Abort or (ToRead <> BufSz) then
     begin
-      ClrIO; Close(Handle); ClrIO;
+      ClrIO;
+      {$I-}
+      Close(Handle);
+      {$I+}
+      Opened := False;
+      ClrIO;
       Fail;
     end;
   end;
@@ -2214,7 +2234,15 @@ end;
 
 destructor TTextReader.Done;
 begin
-  ClrIO; Close(Handle); ClrIO;
+  if Opened then
+  begin
+    ClrIO;
+    {$I-}
+    Close(Handle);
+    {$I+}
+    ClrIO;
+    Opened := False;
+  end;
 end;
 
 function  ExistFile(const FName : PathStr) : Boolean;

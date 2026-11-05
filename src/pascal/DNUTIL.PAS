@@ -1702,7 +1702,7 @@ PROCEDURE TDNApplication.HandleCommand;
      ST: String;
 
      HFile: PHelpFile;
-     HelpStrm: PDosStream;
+     HelpStrm: PStream;
      T : Tevent ;
 
  const
@@ -2260,26 +2260,41 @@ begin
                  begin
                    HelpInUse := True;
                    HelpStrm := New(PDosStream, Init(SourceDir+'DN' + LngId + '.hlp', stOpenRead));
-                   if HelpStrm^.Status <> stOk then
+                   if (HelpStrm = nil) or (HelpStrm^.Status <> stOk) then
                      begin
-                       Dispose(HelpStrm, Done);
+                       if HelpStrm <> nil then Dispose(HelpStrm, Done);
                        HelpStrm := New(PDosStream, Init(StartupDir+'DN' + LngId + '.hlp', stOpenRead));
                      end;
-                   HFile := New(PHelpFile, Init(HelpStrm));
-                   if HelpStrm^.Status <> stOk then
+                   if (HelpStrm = nil) or (HelpStrm^.Status <> stOk) then
+                     begin
+                       if HelpStrm <> nil then Dispose(HelpStrm, Done);
+                       HelpStrm := GetEmbeddedHelpStream;
+                     end;
+                   if (HelpStrm = nil) or (HelpStrm^.Status <> stOk) then
                    begin
+                     if HelpStrm <> nil then Dispose(HelpStrm, Done);
                      Msg(erCantOpenHelp, nil, mfError + mfOkButton);
-                     Dispose(HFile, Done);
                    end
                    else
                    begin
-                     PW := New(PHelpWindow,Init(HFile, GetHelpCtx));
-                     if ValidView(PW) <> nil then
+                     HFile := New(PHelpFile, Init(HelpStrm));
+                     if (HFile = nil) or (HelpStrm^.Status <> stOk) then
                      begin
-                       ExecView(PW);
-                       Dispose(PW, Done);
+                       Msg(erCantOpenHelp, nil, mfError + mfOkButton);
+                       if HFile <> nil then Dispose(HFile, Done);
+                     end
+                     else
+                     begin
+                       PW := New(PHelpWindow,Init(HFile, GetHelpCtx));
+                       if ValidView(PW) <> nil then
+                       begin
+                         ExecView(PW);
+                         Dispose(PW, Done);
+                       end
+                       else
+                         Dispose(HFile, Done);
+                       ClearEvent(Event);
                      end;
-                     ClearEvent(Event);
                    end;
                    HelpInUse := False;
                  end;

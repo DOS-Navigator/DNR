@@ -19,27 +19,26 @@ def main():
     build_dir = 'build'
     out_path = os.path.join('src', 'pascal', 'embedded_resources.inc')
 
-    pairs = [
-        ('DN.DLG', 'DN.LNG', 'Embedded_DNDLG', 'Embedded_DNLNG'),
-        ('DNRUS.DLG', 'DNRUS.LNG', 'Embedded_DNRUSDLG', 'Embedded_DNRUSLNG'),
+    items = [
+        ('DN.DLG', 'Embedded_DNDLG'),
+        ('DN.LNG', 'Embedded_DNLNG'),
+        ('DNRUS.DLG', 'Embedded_DNRUSDLG'),
+        ('DNRUS.LNG', 'Embedded_DNRUSLNG'),
+        ('DN.HLP', 'Embedded_DNHLP'),
+        ('DNRUS.HLP', 'Embedded_DNRUSHLP'),
     ]
 
     lines = ['{ Automatically generated embedded default resources for standalone monolithic dn.exe }\n']
 
-    for dlg_name, lng_name, dlg_var, lng_var in pairs:
-        dlg_path = os.path.join(build_dir, dlg_name)
-        lng_path = os.path.join(build_dir, lng_name)
-        if not os.path.exists(dlg_path) or not os.path.exists(lng_path):
-            print(f"Error: {dlg_path} or {lng_path} not found.")
+    for filename, varname in items:
+        p = os.path.join(build_dir, filename)
+        if not os.path.exists(p):
+            print(f"Error: {p} not found.")
             return 1
-        with open(dlg_path, 'rb') as f:
-            dlg = f.read()
-        with open(lng_path, 'rb') as f:
-            lng = f.read()
-        print(f"Embedding {dlg_name} ({len(dlg)} B) and {lng_name} ({len(lng)} B)...")
-        lines.append(dump_array(dlg_var, dlg))
-        lines.append('\n')
-        lines.append(dump_array(lng_var, lng))
+        with open(p, 'rb') as f:
+            data = f.read()
+        print(f"Embedding {filename} ({len(data)} B) as {varname}...")
+        lines.append(dump_array(varname, data))
         lines.append('\n')
 
     with open(out_path, 'w', encoding='latin-1') as f:

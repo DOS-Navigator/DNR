@@ -274,6 +274,7 @@ procedure ForceWriteShow(P: Pointer);
 function GetString( Index: TStrIdx ): String;
 procedure ToggleCommandLine(OnOff: Boolean);
 procedure AdjustToDesktopSize(var R: TRect; OldDeskSize: TPoint);
+function GetEmbeddedHelpStream: PStream;
 
 const
 
@@ -1172,6 +1173,14 @@ begin
     GetEmbeddedLngStream := CreateEmbeddedStream(@Embedded_DNRUSLNG, Embedded_DNRUSLNG_Size)
   else
     GetEmbeddedLngStream := CreateEmbeddedStream(@Embedded_DNLNG, Embedded_DNLNG_Size);
+end;
+
+function GetEmbeddedHelpStream: PStream;
+begin
+  if LngId = 'RUS' then
+    GetEmbeddedHelpStream := CreateEmbeddedStream(@Embedded_DNRUSHLP, Embedded_DNRUSHLP_Size)
+  else
+    GetEmbeddedHelpStream := CreateEmbeddedStream(@Embedded_DNHLP, Embedded_DNHLP_Size);
 end;
 
 procedure OpenResource;

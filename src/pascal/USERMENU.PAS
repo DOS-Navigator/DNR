@@ -336,6 +336,30 @@ begin
 2:
  DoGlobal := True;
  F := New(PTextReader, Init(SourceDir+'dn.mnu'));
+ if F = nil then F := New(PTextReader, Init(StartupDir+'dn.mnu'));
+ if F = nil then
+  begin
+    Assign(F1, StartupDir+'dn.mnu');
+    {$I-}
+    Rewrite(F1);
+    if IOResult = 0 then
+    begin
+      WriteLn(F1, '; DOS Navigator Default User Menu');
+      WriteLn(F1, '>1 ~C~ommand Prompt');
+      WriteLn(F1, '   cmd.exe');
+      WriteLn(F1, '>1 ~P~owerShell');
+      WriteLn(F1, '   powershell.exe');
+      WriteLn(F1, '>1 ~E~xplorer Here');
+      WriteLn(F1, '   explorer.exe .');
+      WriteLn(F1, '>1 ~N~otepad');
+      WriteLn(F1, '   notepad.exe !.!');
+      WriteLn(F1, '>1 ~D~irectory Listing');
+      WriteLn(F1, '   dir /p');
+      Close(F1);
+      F := New(PTextReader, Init(StartupDir+'dn.mnu'));
+    end;
+    {$I+}
+  end;
  if F = nil then
   begin
    ErrMsg(dlMNUNotFound);

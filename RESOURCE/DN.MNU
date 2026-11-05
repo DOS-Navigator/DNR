@@ -1,0 +1,11 @@
+; DOS Navigator Default User Menu
+>1 ~C~ommand Prompt
+   cmd.exe
+>1 ~P~owerShell
+   powershell.exe
+>1 ~E~xplorer (Current Directory)
+   explorer.exe .
+>1 ~N~otepad (Current File)
+   notepad.exe !.!
+>1 ~D~irectory Listing
+   dir /p

@@ -61,7 +61,10 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path "dist" -Force
           Copy-Item -Path "build\dn.exe" -Destination "dist\dn.exe"
-          Compress-Archive -Path "build\dn.exe", "README.md", "resource" -DestinationPath "dist\dn-win32-x86.zip" -Force
+          Copy-Item -Path "build\DN.HLP" -Destination "dist\DN.HLP" -ErrorAction SilentlyContinue
+          Copy-Item -Path "build\DNRUS.HLP" -Destination "dist\DNRUS.HLP" -ErrorAction SilentlyContinue
+          Copy-Item -Path "RESOURCE\DN.MNU" -Destination "dist\DN.MNU" -ErrorAction SilentlyContinue
+          Compress-Archive -Path "build\dn.exe", "build\DN.HLP", "build\DNRUS.HLP", "RESOURCE\DN.MNU", "README.md", "resource" -DestinationPath "dist\dn-win32-x86.zip" -Force
           Get-ChildItem -Path "dist" | Select-Object Name, Length
 
       - name: Upload Build Artifacts
@@ -69,8 +72,7 @@ jobs:
         with:
           name: dn-win32-x86-binaries
           path: |
-            dist/dn.exe
-            dist/dn-win32-x86.zip
+            dist/*
           retention-days: 30
 
       - name: Publish GitHub Release (Tags only)
