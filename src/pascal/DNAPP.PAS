@@ -839,8 +839,23 @@ procedure TProgram.Idle;
  var P: PView;
      E: TEvent;
      A1, A2: Word;
+     R: TRect;
  label 1;
 begin
+{$IFNDEF CPUI8086}
+  CheckScreenResize;
+  if ConsumeScreenResize then
+  begin
+    Buffer := ScreenBuffer;
+    R.Assign(0, 0, ScreenWidth, ScreenHeight);
+    ChangeBounds(R);
+    R.Assign(0, ScreenHeight - 1 - Byte(InterfaceData.Options and ouiHideStatus = 0),
+             ScreenWidth, ScreenHeight - Byte(InterfaceData.Options and ouiHideStatus = 0));
+    if CommandLine <> nil then CommandLine^.Locate(R);
+    Redraw;
+    FlushScreenBuffer;
+  end;
+{$ENDIF}
 { CPUI8086}
   SliceYield;
 {}

@@ -60,7 +60,13 @@ class Dn(TuiSurface):
             return ok("not running")
         self.tui.key("alt+x")
         self.tui.settle(0.3, 5)
-        self.tui.key("enter")
+        if not self.tui.alive():
+            return ok("exited cleanly via alt+x")
+        try:
+            self.tui.key("enter")
+        except Exception:
+            if not self.tui.alive():
+                return ok("exited cleanly via alt+x")
         for _ in range(30):
             if not self.tui.alive():
                 return ok("exited cleanly via alt+x + enter")

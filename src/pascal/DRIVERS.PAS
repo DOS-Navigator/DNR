@@ -65,6 +65,8 @@ var
 procedure SliceAwake;
 procedure FlushScreenBuffer;
 procedure SliceYield;
+function CheckScreenResize: Boolean;
+function ConsumeScreenResize: Boolean;
 
 { ******** EVENT MANAGER ******** }
 
@@ -158,7 +160,7 @@ var
 
   MouseIntFlag: Byte;
   MouseWhere: TPoint;
-  UserScreenSize: Word;
+  UserScreenSize: LongInt;
   UserScreenWidth: Word;
   MouseX, MouseY,
   OldMouseX, OldMouseY: Word;
@@ -336,6 +338,14 @@ const
   StackLimit: Word = 0;
   ConsoleInputHandle: THandle = 0;
   ConsoleOutputHandle: THandle = 0;
+  AllocatedScreenCells: Integer = 0;
+  ScreenResized: Boolean = False;
+  CharInfoBuf: Windows.PCharInfo = nil;
+  CharInfoBufCap: Integer = 0;
+
+type
+  TCharInfoArray = array[0..$FFFFFF] of Windows.TCharInfo;
+  PCharInfoArray = ^TCharInfoArray;
 
 function MemAvail: LongInt; begin MemAvail := $7FFFFFFF; end;
 function MaxAvail: LongInt; begin MaxAvail := $7FFFFFFF; end;
@@ -731,7 +741,11 @@ begin
     if (not Ok) or (NumWaiting = 0) then Exit;
     Ok := ReadConsoleInputA(H, Rec, 1, NumRead);
     if (not Ok) or (NumRead = 0) then Exit;
-    if (Rec.EventType <> KEY_EVENT) or (not Rec.Event.KeyEvent.bKeyDown) then Continue;
+    if (Rec.EventType <> KEY_EVENT) or (not Rec.Event.KeyEvent.bKeyDown) then
+    begin
+      if Rec.EventType = 4 then CheckScreenResize;
+      Continue;
+    end;
 
     VK := Rec.Event.KeyEvent.wVirtualKeyCode;
     Scan := Rec.Event.KeyEvent.wVirtualScanCode;
@@ -1253,17 +1267,48 @@ asm
 @@4:
 end;
 {$ELSE}
+var
+  H: Windows.THandle;
+  CSBI: Windows.TConsoleScreenBufferInfo;
+  DummyMode: Windows.DWORD;
+  Cols, Rows: Integer;
 begin
   ScreenMode := smCO80;
-  ScreenWidth := 80;
-  ScreenHeight := 25;
+  Cols := 80;
+  Rows := 25;
+  if (ConsoleOutputHandle = 0) or (ConsoleOutputHandle = Windows.INVALID_HANDLE_VALUE) then
+  begin
+    H := Windows.GetStdHandle(Windows.STD_OUTPUT_HANDLE);
+    if not Windows.GetConsoleMode(H, DummyMode) then
+      H := Windows.CreateFileA('CONOUT$', Windows.GENERIC_READ or Windows.GENERIC_WRITE,
+        Windows.FILE_SHARE_READ or Windows.FILE_SHARE_WRITE, nil, Windows.OPEN_EXISTING, 0, 0);
+    ConsoleOutputHandle := H;
+  end;
+  H := ConsoleOutputHandle;
+  if (H <> 0) and (H <> Windows.INVALID_HANDLE_VALUE) then
+  begin
+    if Windows.GetConsoleScreenBufferInfo(H, CSBI) then
+    begin
+      Cols := CSBI.srWindow.Right - CSBI.srWindow.Left + 1;
+      Rows := CSBI.srWindow.Bottom - CSBI.srWindow.Top + 1;
+    end;
+  end;
+  if Cols < 80 then Cols := 80;
+  if Rows < 25 then Rows := 25;
+  if Cols > 300 then Cols := 300;
+  if Rows > 150 then Rows := 150;
+  ScreenWidth := Cols;
+  ScreenHeight := Rows;
   HiResScreen := True;
   CheckSnow := False;
   CursorLines := $0607;
-  if ScreenBuffer = nil then
+  if (ScreenBuffer = nil) or (AllocatedScreenCells <> ScreenWidth * ScreenHeight) then
   begin
-    GetMem(ScreenBuffer, ScreenWidth * ScreenHeight * 2);
-    FillWord(ScreenBuffer^, ScreenWidth * ScreenHeight, $0720);
+    if ScreenBuffer <> nil then
+      FreeMem(ScreenBuffer, AllocatedScreenCells * 2);
+    AllocatedScreenCells := ScreenWidth * ScreenHeight;
+    GetMem(ScreenBuffer, AllocatedScreenCells * 2);
+    FillWord(ScreenBuffer^, AllocatedScreenCells, $0720);
   end;
 end;
 {$ENDIF}
@@ -1464,8 +1509,15 @@ end;
 begin
   if ScreenBuffer <> nil then
   begin
-    FreeMem(ScreenBuffer, ScreenWidth * ScreenHeight * 2);
+    FreeMem(ScreenBuffer, AllocatedScreenCells * 2);
     ScreenBuffer := nil;
+    AllocatedScreenCells := 0;
+  end;
+  if CharInfoBuf <> nil then
+  begin
+    FreeMem(CharInfoBuf, CharInfoBufCap * SizeOf(Windows.TCharInfo));
+    CharInfoBuf := nil;
+    CharInfoBufCap := 0;
   end;
 end;
 {$ENDIF}
@@ -3648,7 +3700,7 @@ var
   DummyMode: Windows.DWORD;
   BufferSize, BufferCoord: Windows.TCoord;
   WriteRegion: Windows.TSmallRect;
-  CharInfoBuf: array[0..80*50-1] of Windows.TCharInfo;
+  CSBI: Windows.TConsoleScreenBufferInfo;
   I, TotalCells: Integer;
   Src: PWordArray;
 begin
@@ -3665,12 +3717,18 @@ begin
   H := ConsoleOutputHandle;
   if (H = 0) or (H = Windows.INVALID_HANDLE_VALUE) then Exit;
   TotalCells := ScreenWidth * ScreenHeight;
-  if TotalCells > High(CharInfoBuf) + 1 then TotalCells := High(CharInfoBuf) + 1;
+  if TotalCells <= 0 then Exit;
+  if TotalCells > CharInfoBufCap then
+  begin
+    if CharInfoBuf <> nil then FreeMem(CharInfoBuf, CharInfoBufCap * SizeOf(Windows.TCharInfo));
+    CharInfoBufCap := TotalCells + 1024;
+    GetMem(CharInfoBuf, CharInfoBufCap * SizeOf(Windows.TCharInfo));
+  end;
   Src := PWordArray(ScreenBuffer);
   for I := 0 to TotalCells - 1 do
   begin
-    CharInfoBuf[I].AsciiChar := Char(Lo(Src^[I]));
-    CharInfoBuf[I].Attributes := Hi(Src^[I]);
+    PCharInfoArray(CharInfoBuf)^[I].AsciiChar := Char(Lo(Src^[I]));
+    PCharInfoArray(CharInfoBuf)^[I].Attributes := Hi(Src^[I]);
   end;
   BufferSize.X := ScreenWidth;
   BufferSize.Y := ScreenHeight;
@@ -3680,8 +3738,62 @@ begin
   WriteRegion.Top := 0;
   WriteRegion.Right := ScreenWidth - 1;
   WriteRegion.Bottom := ScreenHeight - 1;
-  Windows.WriteConsoleOutputA(H, @CharInfoBuf[0], BufferSize, BufferCoord, WriteRegion);
+  if Windows.GetConsoleScreenBufferInfo(H, CSBI) then
+  begin
+    WriteRegion.Left := CSBI.srWindow.Left;
+    WriteRegion.Top := CSBI.srWindow.Top;
+    WriteRegion.Right := CSBI.srWindow.Left + ScreenWidth - 1;
+    WriteRegion.Bottom := CSBI.srWindow.Top + ScreenHeight - 1;
+  end;
+  Windows.WriteConsoleOutputA(H, CharInfoBuf, BufferSize, BufferCoord, WriteRegion);
 {$ENDIF}
+end;
+
+function CheckScreenResize: Boolean;
+var
+  H: Windows.THandle;
+  CSBI: Windows.TConsoleScreenBufferInfo;
+  DummyMode: Windows.DWORD;
+  NewCols, NewRows: Integer;
+begin
+  CheckScreenResize := False;
+{$IFNDEF CPUI8086}
+  if (ConsoleOutputHandle = 0) or (ConsoleOutputHandle = Windows.INVALID_HANDLE_VALUE) then
+  begin
+    H := Windows.GetStdHandle(Windows.STD_OUTPUT_HANDLE);
+    if not Windows.GetConsoleMode(H, DummyMode) then
+      H := Windows.CreateFileA('CONOUT$', Windows.GENERIC_READ or Windows.GENERIC_WRITE,
+        Windows.FILE_SHARE_READ or Windows.FILE_SHARE_WRITE, nil, Windows.OPEN_EXISTING, 0, 0);
+    ConsoleOutputHandle := H;
+  end;
+  H := ConsoleOutputHandle;
+  if (H = 0) or (H = Windows.INVALID_HANDLE_VALUE) then Exit;
+  if not Windows.GetConsoleScreenBufferInfo(H, CSBI) then Exit;
+  NewCols := CSBI.srWindow.Right - CSBI.srWindow.Left + 1;
+  NewRows := CSBI.srWindow.Bottom - CSBI.srWindow.Top + 1;
+  if NewCols < 80 then NewCols := 80;
+  if NewRows < 25 then NewRows := 25;
+  if NewCols > 300 then NewCols := 300;
+  if NewRows > 150 then NewRows := 150;
+  if (NewCols <> ScreenWidth) or (NewRows <> ScreenHeight) then
+  begin
+    if ScreenBuffer <> nil then
+      FreeMem(ScreenBuffer, AllocatedScreenCells * 2);
+    ScreenWidth := NewCols;
+    ScreenHeight := NewRows;
+    AllocatedScreenCells := ScreenWidth * ScreenHeight;
+    GetMem(ScreenBuffer, AllocatedScreenCells * 2);
+    FillWord(ScreenBuffer^, AllocatedScreenCells, $0720);
+    ScreenResized := True;
+    CheckScreenResize := True;
+  end;
+{$ENDIF}
+end;
+
+function ConsumeScreenResize: Boolean;
+begin
+  ConsumeScreenResize := ScreenResized;
+  ScreenResized := False;
 end;
 
 procedure SliceYield;
