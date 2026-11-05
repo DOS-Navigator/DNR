@@ -167,7 +167,7 @@ type
 
 { DOS file name string }
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
   FNameStr = PChar;
 {$ELSE}
   FNameStr = string[79];
@@ -352,7 +352,7 @@ type
     procedure PutItem(var S: TStream; Item: Pointer); virtual;
   end;
 
-{$IFNDEF Windows}
+{$IFNDEF WIN16_GUI}
 
 { TResourceCollection object }
 
@@ -526,7 +526,7 @@ const
     Load:    @TStrCollection.Load;
     Store:   @TStrCollection.Store);
 
-{$IFNDEF Windows }
+{$IFNDEF WIN16_GUI}
 
 const
   RStringList: TStreamRec = (
@@ -546,11 +546,11 @@ const
 
 implementation
 
-{$IFDEF Windows}
-uses WinProcs, DnStrings, OMemory;
-{$ELSE}
 {$IFDEF FPC}
 uses Memory, DnStrings, SysUtils;   { SysUtils: FileOpen/FileCreate/... }
+{$ELSE}
+{$IFDEF WIN16_GUI}
+uses WinProcs, DnStrings, OMemory;
 {$ELSE}
 uses Memory, DnStrings;
 {$ENDIF}
@@ -572,7 +572,7 @@ begin
 end;
 {$ENDIF}
 
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
   {$DEFINE NewExeFormat}
 {$ENDIF}
 
@@ -620,7 +620,7 @@ type
     Data: record end;
   end;
 begin
-{$IFNDEF Windows}
+{$IFNDEF WIN16_GUI}
   FillChar(Image(Self).Data, SizeOf(Self) - SizeOf(TObject), 0);
 {$ENDIF}
 end;
@@ -1054,7 +1054,7 @@ asm
         PUSH    ES
         PUSH    DI
         CALL    TStream.Init
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
         LEA     DI,NameBuf
         PUSH    SS
         PUSH    DI
@@ -2604,7 +2604,7 @@ asm
         PUSH    CX
         PUSH    WORD PTR ES:[DI+2]
         PUSH    WORD PTR ES:[DI]
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
         MOV     AX,[BP]
         AND     AL,0FEH
         PUSH    AX
@@ -2648,7 +2648,7 @@ asm
         PUSH    CX
         PUSH    WORD PTR ES:[DI+2]
         PUSH    WORD PTR ES:[DI]
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
         MOV     AX,[BP]
         AND     AL,0FEH
         PUSH    AX
@@ -2770,7 +2770,7 @@ asm
         PUSH    CX
         PUSH    WORD PTR ES:[DI+2]
         PUSH    WORD PTR ES:[DI]
-{$IFDEF Windows}
+{$IFDEF WIN16_GUI}
         MOV     AX,[BP]
         AND     AL,0FEH
         PUSH    AX
@@ -3015,7 +3015,7 @@ begin
   S.StrWrite(Item);
 end;
 
-{$IFNDEF Windows }
+{$IFNDEF WIN16_GUI}
 
 { Private resource manager types }
 
