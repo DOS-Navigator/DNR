@@ -1,0 +1,22 @@
+{
+  "$schema": "https://repomix.com/schemas/config.json",
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "topFilesLen": 5
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "src/pascal/embedded_resources.inc",
+      "repomix-output.*",
+      "*.zip",
+      "*.com",
+      "*.bin",
+      "docs/images/**"
+    ]
+  }
+}

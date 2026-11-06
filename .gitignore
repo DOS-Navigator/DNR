@@ -368,3 +368,21 @@ helpers/
 tools/*.py
 !tools/test_full_tui_interactive.py
 tools/test_charinfo.pas
+# DOS binaries and raw binary blobs
+*.com
+*.bin
+
+# Build generated include files
+src/pascal/embedded_resources.inc
+
+# Generated test binaries and test logs
+test_*.exe
+test_*.o
+test_*.log
+*.log
+
+# Package archives
+*.zip
+
+# Repomix packing outputs
+repomix-output.*

@@ -1,0 +1,24 @@
+# Build artifacts and packaging
+build/
+dist/
+**/__pycache__/
+
+# Compiled objects and executables
+*.exe
+*.o
+*.ppu
+*.a
+*.map
+*.bin
+*.com
+*.zip
+*.pyc
+
+# Generated embedded binaries and previous snapshots
+src/pascal/embedded_resources.inc
+repomix-output.*
+
+# Binary assets and media
+docs/images/
+*.png
+*.ico
